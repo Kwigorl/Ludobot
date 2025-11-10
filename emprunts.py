@@ -4,17 +4,18 @@ from discord import app_commands
 import sqlite3
 from datetime import datetime
 import os
+
 # --------------------------
 # CONFIGURATION via variables d'environnement
 # --------------------------
-CANAL_ID = int(os.environ["CANAL_ID"])  # Discord Channel ID
-ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])  # Discord Role ID
-DB_PATH = os.path.join("data", "jeux.db")  # chemin vers la base SQLite
+CANAL_ID = int(os.environ["CANAL_ID"])            # ID du canal Discord
+ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])  # ID du rôle Bureau
+DB_PATH = os.path.join("data", "jeux.db")        # chemin vers la base SQLite
 
-
-# Créneaux d'emprunt
+# --------------------------
+# CRENEAUX D'EMPRUNT
+# --------------------------
 CRENEAUX = [
-    {"jour": 1, "start": 20, "end": 24},
     {"jour": 2, "start": 20, "end": 24},  # mercredi 20h-00h
     {"jour": 4, "start": 20, "end": 24},  # vendredi 20h-00h
     {"jour": 6, "start": 14, "end": 18},  # dimanche 14h-18h
@@ -131,7 +132,7 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
     async def ajout(self, interaction: discord.Interaction, jeu: str):
-        if ROLE_BUREAU not in [r.name for r in interaction.user.roles]:
+        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
             await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
         try:
@@ -147,7 +148,7 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="retire", description="Retire un jeu (Bureau)")
     @app_commands.describe(jeu="Nom ou numéro du jeu à retirer")
     async def retire(self, interaction: discord.Interaction, jeu: str):
-        if ROLE_BUREAU not in [r.name for r in interaction.user.roles]:
+        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
             await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
         j = find_jeu(jeu)
