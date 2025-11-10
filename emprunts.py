@@ -8,7 +8,7 @@ import os
 # --------------------------
 # CONFIGURATION
 # --------------------------
-CANAL_ID = 123456789012345678  # ID du canal où poster la liste
+CANAL_ID = 1437514596012523591  # ID du canal où poster la liste
 ROLE_BUREAU = "Bureau"          # rôle pour ajouter/retirer des jeux
 DB_PATH = os.path.join("data", "jeux.db")  # chemin vers la base SQLite
 
