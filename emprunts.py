@@ -14,6 +14,7 @@ DB_PATH = os.path.join("data", "jeux.db")  # chemin vers la base SQLite
 
 # Créneaux d'emprunt
 CRENEAUX = [
+    {"jour": 1, "start": 20, "end": 24},
     {"jour": 2, "start": 20, "end": 24},  # mercredi 20h-00h
     {"jour": 4, "start": 20, "end": 24},  # vendredi 20h-00h
     {"jour": 6, "start": 14, "end": 18},  # dimanche 14h-18h
