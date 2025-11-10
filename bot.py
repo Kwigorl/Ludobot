@@ -25,6 +25,12 @@ async def start_bot():
     TOKEN = os.environ["DISCORD_TOKEN"]
     async with bot:
         await bot.load_extension("emprunts")  # ton cog avec /emprunte, /rend, etc.
+        # Synchronisation des commandes slash
+        try:
+            synced = await bot.tree.sync()
+            print(f"{len(synced)} commandes slash synchronisées.")
+        except Exception as e:
+            print(f"Erreur de synchronisation des commandes : {e}")
         await bot.start(TOKEN)
 
 # Lancer le bot Discord dans un thread séparé
