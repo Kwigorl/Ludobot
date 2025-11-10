@@ -1,186 +1,62 @@
+import os
+import asyncio
+from flask import Flask
 import discord
 from discord.ext import commands
-from discord import app_commands
-import sqlite3
-from datetime import datetime
-import os
 
-# --------------------------
-# CONFIGURATION via variables d'environnement
-# --------------------------
-CANAL_ID = int(os.environ["CANAL_ID"])            # ID du canal Discord
-ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])  # ID du rôle Bureau
-DB_PATH = os.path.join("data", "jeux.db")        # chemin vers la base SQLite
+# ----------------------
+# FLASK (pour Render / UptimeRobot)
+# ----------------------
+app = Flask(__name__)
 
-# --------------------------
-# CRENEAUX D'EMPRUNT
-# --------------------------
-CRENEAUX = [
-    {"jour": 2, "start": 1, "end": 24},  # mercredi 20h-00h
-    {"jour": 4, "start": 1, "end": 24},  # vendredi 20h-00h
-    {"jour": 6, "start": 1, "end": 24},  # dimanche 14h-18h
-    {"jour": 1, "start": 1, "end": 24},  # dimanche 14h-18h
-    {"jour": 3, "start": 1, "end": 24},  # dimanche 14h-18h
-    {"jour": 5, "start": 1, "end": 24},  # dimanche 14h-18h
-    {"jour": 7, "start": 1, "end": 24},  # dimanche 14h-18h
-]
+@app.route("/")
+def home():
+    return "Bot Discord actif !", 200
 
-# --------------------------
-# INITIALISATION DB
-# --------------------------
-os.makedirs("data", exist_ok=True)
-conn = sqlite3.connect(DB_PATH)
-c = conn.cursor()
-c.execute('''
-CREATE TABLE IF NOT EXISTS jeux (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT UNIQUE,
-    emprunte INTEGER DEFAULT 0,
-    emprunteur TEXT,
-    date_emprunt TEXT
-)
-''')
-conn.commit()
+# ----------------------
+# DISCORD BOT
+# ----------------------
+intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True  # nécessaire pour vérifier les rôles Bureau
+bot = commands.Bot(command_prefix=None, intents=intents)
 
-# --------------------------
-# FONCTIONS UTILES
-# --------------------------
-def est_disponible():
-    now = datetime.now()
-    jour = now.weekday()
-    heure = now.hour
-    for creneau in CRENEAUX:
-        if creneau["jour"] == jour and creneau["start"] <= heure < creneau["end"]:
-            return True
-    return False
+# ----------------------
+# LANCEMENT DU BOT
+# ----------------------
+async def start_discord_bot():
+    TOKEN = os.environ.get("DISCORD_TOKEN")
+    if not TOKEN:
+        print("Erreur : DISCORD_TOKEN non défini dans les variables d'environnement !")
+        return
 
-def format_liste(jeux):
-    lines = []
-    for j in jeux:
-        status = "✅" if j[2] == 0 else "❌"
-        detail = f" (emprunté par {j[3]} le {j[4]})" if j[2] else ""
-        lines.append(f"**{j[0]}.** {status} {j[1]}{detail}")
-    return "\n".join(lines)
+    # Chargement du cog emprunts
+    try:
+        print("Chargement du cog emprunts...")
+        await bot.load_extension("emprunts")  # emprunts.py doit être dans le même dossier
+        print("Cog emprunts chargé !")
+    except Exception as e:
+        print(f"Erreur lors du chargement du cog : {e}")
 
-async def update_message(channel, bot):
-    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
-    jeux = c.fetchall()
-    msg = None
-    async for m in channel.history(limit=50):
-        if m.author == bot.user and m.pinned:
-            msg = m
-            break
+    # Synchronisation des slash commands
+    try:
+        synced = await bot.tree.sync()
+        print(f"{len(synced)} commandes slash synchronisées.")
+    except Exception as e:
+        print(f"Erreur de synchronisation des commandes : {e}")
 
-     # Texte explicatif
-    intro = (
-        "Vous êtes à l'une de nos soirées jeux et vous souhaitez repartir avec un jeu de notre ludothèque ? Vous pouvez en emprunter 1 à la fois, pour une durée de 2 semaines.\n\n"
-        "Pour cela, avant de quitter la salle, utilisez ici la commande suivante :\n"
-        "`/emprunte <numéro ou nom du jeu>` pour emprunter un jeu.\n\n"
-        "Quand vous le ramènerez, n'oubliez pas d'utiliser la commande suivante :\n"
-        "`/rend <numéro ou nom du jeu>` pour rendre un jeu.\n\n"
-        "**Liste des jeux empruntables :**\n\n"
-    )
-    
-    content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
-    if msg:
-        await msg.edit(content=content)
-    else:
-        new_msg = await channel.send(content)
-        await new_msg.pin()
+    # Démarrage du bot
+    try:
+        await bot.start(TOKEN)
+    except Exception as e:
+        print(f"Erreur lors du démarrage du bot : {e}")
 
-def find_jeu(identifiant):
-    c.execute("SELECT id, nom, emprunte FROM jeux")
-    jeux = c.fetchall()
-    identifiant = str(identifiant).lower()
-    for j in jeux:
-        if str(j[0]) == identifiant or identifiant in j[1].lower():
-            return j
-    return None
+# ----------------------
+# LANCEMENT FLASK + BOT
+# ----------------------
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_discord_bot())  # lance le bot en tâche async
 
-# --------------------------
-# COG
-# --------------------------
-class Emprunts(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    # COMMANDES SLASH
-    @app_commands.command(name="emprunte", description="Emprunte un jeu")
-    @app_commands.describe(jeu="Nom ou numéro du jeu")
-    async def emprunte(self, interaction: discord.Interaction, jeu: str):
-        if not est_disponible():
-            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
-            return
-        j = find_jeu(jeu)
-        if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
-            return
-        if j[2]:
-            await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
-            return
-        now = datetime.now().strftime("%d/%m/%Y")
-        c.execute("UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?", (interaction.user.name, now, j[0]))
-        conn.commit()
-        channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel, self.bot)
-        await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
-
-    @app_commands.command(name="rend", description="Rend un jeu")
-    @app_commands.describe(jeu="Nom ou numéro du jeu")
-    async def rend(self, interaction: discord.Interaction, jeu: str):
-        if not est_disponible():
-            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
-            return
-        j = find_jeu(jeu)
-        if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
-            return
-        if not j[2]:
-            await interaction.response.send_message(f"❌ {j[1]} n’est pas emprunté.", ephemeral=True)
-            return
-        c.execute("UPDATE jeux SET emprunte=0, emprunteur=NULL, date_emprunt=NULL WHERE id=?", (j[0],))
-        conn.commit()
-        channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel, self.bot)
-        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}.", ephemeral=True)
-
-    @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
-    @app_commands.describe(jeu="Nom du jeu à ajouter")
-    async def ajout(self, interaction: discord.Interaction, jeu: str):
-        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
-            return
-        try:
-            c.execute("INSERT INTO jeux(nom) VALUES(?)", (jeu,))
-            conn.commit()
-        except sqlite3.IntegrityError:
-            await interaction.response.send_message("❌ Ce jeu existe déjà.", ephemeral=True)
-            return
-        channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel, self.bot)
-        await interaction.response.send_message(f"✅ {jeu} ajouté.", ephemeral=True)
-
-    @app_commands.command(name="retire", description="Retire un jeu (Bureau)")
-    @app_commands.describe(jeu="Nom ou numéro du jeu à retirer")
-    async def retire(self, interaction: discord.Interaction, jeu: str):
-        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
-            return
-        j = find_jeu(jeu)
-        if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
-            return
-        c.execute("DELETE FROM jeux WHERE id=?", (j[0],))
-        conn.commit()
-        channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel, self.bot)
-        await interaction.response.send_message(f"✅ {j[1]} retiré.", ephemeral=True)
-
-    @app_commands.command(name="liste", description="Met à jour la liste des jeux")
-    async def liste(self, interaction: discord.Interaction):
-        channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel, self.bot)
-        await interaction.response.send_message("✅ Liste mise à jour.", ephemeral=True)
-
-async def setup(bot):
-    await bot.add_cog(Emprunts(bot))
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
