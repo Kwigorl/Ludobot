@@ -4,13 +4,13 @@ from discord import app_commands
 import sqlite3
 from datetime import datetime
 import os
-
 # --------------------------
-# CONFIGURATION
+# CONFIGURATION via variables d'environnement
 # --------------------------
-CANAL_ID = 1437514596012523591  # ID du canal où poster la liste
-ROLE_BUREAU = "Bureau"          # rôle pour ajouter/retirer des jeux
+CANAL_ID = int(os.environ["CANAL_ID"])  # Discord Channel ID
+ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])  # Discord Role ID
 DB_PATH = os.path.join("data", "jeux.db")  # chemin vers la base SQLite
+
 
 # Créneaux d'emprunt
 CRENEAUX = [
