@@ -1,36 +1,25 @@
 import os
-import threading
 import asyncio
-from flask import Flask
 import discord
 from discord.ext import commands
 
-# Flask pour Render / UptimeRobot
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot Discord actif !", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-# Discord bot
+# Intents pour slash commands et vérifier rôles
 intents = discord.Intents.default()
 intents.guilds = True
-intents.members = True  # nécessaire pour vérifier les rôles Bureau
+intents.members = True
+
 bot = commands.Bot(command_prefix=None, intents=intents)
 
-async def start_discord_bot():
+# Evenement pour vérifier que le bot se connecte
+@bot.event
+async def on_ready():
+    print(f"{bot.user} est connecté !")
+
+async def main():
     TOKEN = os.environ.get("DISCORD_TOKEN")
-    await bot.load_extension("emprunts")  # charge ton cog
-    await bot.tree.sync()                 # synchronise les slash commands
+    if not TOKEN:
+        print("Erreur : DISCORD_TOKEN manquant")
+        return
     await bot.start(TOKEN)
 
-if __name__ == "__main__":
-    # Flask dans un thread séparé
-    threading.Thread(target=run_flask).start()
-
-    # Bot Discord dans le thread principal
-    asyncio.run(start_discord_bot())
+asyncio.run(main())
