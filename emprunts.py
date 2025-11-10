@@ -76,7 +76,7 @@ async def update_message(channel, bot):
         "Vous êtes à l'une de nos soirées jeux et vous souhaitez repartir avec un jeu de notre ludothèque ? Vous pouvez en emprunter 1 à la fois, pour une durée de 2 semaines.\n\n"
         "Pour cela, avant de quitter la salle, utilisez ici la commande suivante :\n"
         "`/emprunte <numéro ou nom du jeu>` pour emprunter un jeu.\n\n"
-        "Quand vous le ramènerez, n'oubliez pas d'utiliser la commande suivante :
+        "Quand vous le ramènerez, n'oubliez pas d'utiliser la commande suivante :\n"
         "`/rend <numéro ou nom du jeu>` pour rendre un jeu.\n\n"
         "**Liste des jeux empruntables :**\n\n"
     )
