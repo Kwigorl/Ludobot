@@ -24,7 +24,9 @@ bot = commands.Bot(command_prefix=None, intents=intents)
 async def start_bot():
     TOKEN = os.environ["DISCORD_TOKEN"]
     async with bot:
+        print("Chargement du cog emprunts...")
         await bot.load_extension("emprunts")  # ton cog avec /emprunte, /rend, etc.
+        print("Cog emprunts chargé !")
         # Synchronisation des commandes slash
         try:
             synced = await bot.tree.sync()
