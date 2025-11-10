@@ -70,6 +70,17 @@ async def update_message(channel, bot):
         if m.author == bot.user and m.pinned:
             msg = m
             break
+
+     # Texte explicatif
+    intro = (
+        "Vous êtes à l'une de nos soirées jeux et vous souhaitez repartir avec un jeu de notre ludothèque ? Vous pouvez en emprunter 1 à la fois, pour une durée de 2 semaines.\n\n"
+        "Pour cela, avant de quitter la salle, utilisez ici la commande suivante :\n"
+        "`/emprunte <numéro ou nom du jeu>` pour emprunter un jeu.\n\n"
+        "Quand vous le ramènerez, n'oubliez pas d'utiliser la commande suivante :
+        "`/rend <numéro ou nom du jeu>` pour rendre un jeu.\n\n"
+        "**Liste des jeux empruntables :**\n\n"
+    )
+    
     content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
     if msg:
         await msg.edit(content=content)
