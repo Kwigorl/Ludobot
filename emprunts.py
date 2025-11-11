@@ -109,7 +109,11 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
             return
         now = datetime.now().strftime("%d/%m/%Y")
-        c.execute("UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?", (interaction.user.name, now, j[0]))
+       emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
+        c.execute(
+    "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
+    (emprunteur, now, j[0])
+)
         conn.commit()
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
