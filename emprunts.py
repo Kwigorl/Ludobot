@@ -31,7 +31,7 @@ CRENEAUX = [
     {"jour": 1, "start": 1, "end": 24},
     {"jour": 3, "start": 1, "end": 24},
     {"jour": 5, "start": 1, "end": 24},
-    {"jour": 7, "start": 1, "end": 24},
+    {"jour": 0, "start": 1, "end": 24},
 ]
 
 def est_disponible():
