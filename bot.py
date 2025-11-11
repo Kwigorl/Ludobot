@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 
 # ----------------------
-# FLASK pour Render / UptimeRobot
+# FLASK pour Render
 # ----------------------
 app = Flask(__name__)
 
@@ -23,16 +23,13 @@ def run_flask():
 # ----------------------
 TOKEN = os.environ.get("DISCORD_TOKEN")
 APPLICATION_ID = int(os.environ.get("DISCORD_APPLICATION_ID"))
+CANAL_ID = int(os.environ.get("CANAL_ID"))
 
 intents = discord.Intents.default()
 intents.guilds = True
-intents.members = True  # nécessaire pour vérifier les rôles Bureau
+intents.members = True  # nécessaire pour vérifier les rôles
 
-bot = commands.Bot(
-    command_prefix=None,
-    intents=intents,
-    application_id=APPLICATION_ID
-)
+bot = commands.Bot(command_prefix=None, intents=intents, application_id=APPLICATION_ID)
 
 # ----------------------
 # EVENTS
@@ -40,12 +37,21 @@ bot = commands.Bot(
 @bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
-    # Synchronisation des commandes slash
     try:
+        # Synchronisation des commandes slash
         await bot.tree.sync()
-        print(f"Commandes slash synchronisées")
+        print("Commandes slash synchronisées")
     except Exception as e:
         print(f"Erreur de synchronisation : {e}")
+
+    # Poste le message initial de la liste des jeux
+    channel = bot.get_channel(CANAL_ID)
+    if channel:
+        # Appelle la fonction update_message du cog
+        for cog in bot.cogs.values():
+            if hasattr(cog, "update_message"):
+                await cog.update_message(channel)
+                print("Message initial de liste des jeux posté")
 
 # ----------------------
 # COGS
