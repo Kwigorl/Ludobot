@@ -61,9 +61,10 @@ def get_jeux():
 def format_liste(jeux):
     lines = []
     for idx, j in enumerate(jeux, start=1):
-        status = "✅" if j[2] == 0 else "❌"
-        detail = f" (emprunté par {j[3]} le {j[4]})" if j[2] else ""
-        lines.append(f"**{idx}.** {status} {j[1]}{detail}")
+        if j[2]:  # emprunté
+            lines.append(f"**{idx}.** ~~{j[1]}~~ (emprunté par {j[3]} le {j[4]})")
+        else:      # disponible
+            lines.append(f"**{idx}.** {j[1]}")
     return "\n".join(lines)
 
 def find_jeu(user_input):
