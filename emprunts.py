@@ -98,11 +98,12 @@ class Emprunts(commands.Cog):
     async def update_message(self, channel):
         jeux = get_jeux()
         content = (
+            "\n"
             "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
-            "📆 Vous pouvez en emprunter **1 par utilisateur·rice Discord**, pendant 2 semaines.\n\n"
-            "📤 Pour emprunter : tapez `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
-            "📥 Pour le rendre : tapez `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
-            "🎲 **Jeux disponibles :**\n\n"
+            "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
+            "📤 Quand vous l'empruntez : tapez ici `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
+            "📥 Quand vous le retournez : tapez ici `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
+            "🎲 Jeux disponibles :\n\n"
             + format_liste(jeux)
         )
 
