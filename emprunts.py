@@ -95,7 +95,7 @@ class Emprunts(commands.Cog):
     # --- FONCTION DE MISE À JOUR DU MESSAGE ---
     async def update_message(self, channel):
         jeux = get_jeux()
-        content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
+        content = "Vous souhaitez repartir d'une séance avec un jeu de l'asso ? Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n Pour cela, tapez ici la commande /emprunt [Numéro du jeu] (ex : /emprunt 3).\n Quand vous ramènerez le jeu, n'oublier pas le taper ici /retour [Numéro du jeu] (ex : /retour 3).\n\n 🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
         msg = None
         async for m in channel.history(limit=50):
             if m.author == self.bot.user:
@@ -107,7 +107,7 @@ class Emprunts(commands.Cog):
             await channel.send(content)
 
     # --- COMMANDES SLASH ---
-    @app_commands.command(name="emprunte", description="Emprunte un jeu")
+    @app_commands.command(name="emprunt", description="Emprunte un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
         if not est_disponible():
@@ -131,7 +131,7 @@ class Emprunts(commands.Cog):
         await self.update_message(channel)
         await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
 
-    @app_commands.command(name="rend", description="Rend un jeu")
+    @app_commands.command(name="retour", description="Rend un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
         if not est_disponible():
@@ -166,7 +166,7 @@ class Emprunts(commands.Cog):
         await self.update_message(channel)
         await interaction.response.send_message(f"✅ {jeu} ajouté.", ephemeral=True)
 
-    @app_commands.command(name="retire", description="Retire un jeu (Bureau)")
+    @app_commands.command(name="retrait", description="Retire un jeu (Bureau)")
     @app_commands.describe(jeu="Nom ou numéro du jeu à retirer")
     async def retire(self, interaction: discord.Interaction, jeu: str):
         if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
