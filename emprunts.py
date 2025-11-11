@@ -62,9 +62,9 @@ def format_liste(jeux):
     lines = []
     for idx, j in enumerate(jeux, start=1):
         if j[2]:  # emprunté
-            lines.append(f"- **{idx}. {j[1]}** (emprunté par {j[3]} le {j[4]})")
+            lines.append(f"- {idx}. {j[1]} (emprunté par {j[3]} le {j[4]})")
         else:      # disponible
-            lines.append(f"+ **{idx}. {j[1]}**")
+            lines.append(f"+ {idx}. {j[1]}")
     return "```diff\n" + "\n".join(lines) + "\n```"
 
 def find_jeu(user_input):
