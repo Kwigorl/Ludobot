@@ -95,7 +95,7 @@ class Emprunts(commands.Cog):
     # --- FONCTION DE MISE À JOUR DU MESSAGE ---
     async def update_message(self, channel):
         jeux = get_jeux()
-        content = "Vous souhaitez repartir d'une séance avec un jeu de l'asso ? Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n Pour cela, tapez ici la commande /emprunt [Numéro du jeu] (ex : /emprunt 3).\n Quand vous ramènerez le jeu, n'oublier pas le taper ici /retour [Numéro du jeu] (ex : /retour 3).\n\n 🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
+        content = "Vous souhaitez repartir d'une séance avec un jeu de l'asso ? Vous pouvez en emprunter **1 par utilisateur·rice Discord, pendant 2 semaines.**\n""Pour cela, tapez ici la commande **/emprunt [Numéro du jeu]** (ex : /emprunt 3).**\n""Quand vous ramènerez le jeu, n'oublier pas le taper ici la commande **/retour [Numéro du jeu]** (ex : /retour 3).**\n\n""🎲 Jeux disponibles :\n\n" + format_liste(jeux)
         msg = None
         async for m in channel.history(limit=50):
             if m.author == self.bot.user:
