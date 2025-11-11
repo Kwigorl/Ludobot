@@ -25,13 +25,13 @@ conn.commit()
 
 # Créneaux d'emprunt
 CRENEAUX = [
-    {"jour": 2, "start": 1, "end": 24},
-    {"jour": 4, "start": 1, "end": 24},
-    {"jour": 6, "start": 1, "end": 24},
-    {"jour": 1, "start": 1, "end": 24},
-    {"jour": 3, "start": 1, "end": 24},
-    {"jour": 5, "start": 1, "end": 24},
-    {"jour": 0, "start": 1, "end": 24},
+    {"jour": 2, "start": 0, "end": 24},
+    {"jour": 4, "start": 0, "end": 24},
+    {"jour": 6, "start": 0, "end": 24},
+    {"jour": 1, "start": 0, "end": 24},
+    {"jour": 3, "start": 0, "end": 24},
+    {"jour": 5, "start": 0, "end": 24},
+    {"jour": 0, "start": 0, "end": 24},
 ]
 
 def est_disponible():
