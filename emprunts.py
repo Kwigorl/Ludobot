@@ -56,10 +56,10 @@ def est_disponible():
 
 def format_liste(jeux):
     lines = []
-    for idx, j in enumerate(jeux, start=1):  # start=1 pour numéroter à partir de 1
+    for j in jeux:
         status = "✅" if j[2] == 0 else "❌"
         detail = f" (emprunté par {j[3]} le {j[4]})" if j[2] else ""
-        lines.append(f"**{idx}.** {status} {j[1]}{detail}")
+        lines.append(f"**{j[0]}.** {status} {j[1]}{detail}")
     return "\n".join(lines)
 
 def find_jeu(identifiant):
@@ -91,7 +91,8 @@ class Emprunts(commands.Cog):
         if msg:
             await msg.edit(content=content)
         else:
-            await channel.send(content)  # plus d'épinglage
+            new_msg = await channel.send(content)
+            await new_msg.pin()
 
     # --- COMMANDES SLASH ---
     @app_commands.command(name="emprunte", description="Emprunte un jeu")
@@ -100,16 +101,6 @@ class Emprunts(commands.Cog):
         if not est_disponible():
             await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
             return
-
-        emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
-
-        # --- Vérifie si l'utilisateur a déjà un jeu emprunté ---
-        c.execute("SELECT COUNT(*) FROM jeux WHERE emprunte=1 AND emprunteur=?", (emprunteur,))
-        nb_emprunts = c.fetchone()[0]
-        if nb_emprunts >= 1:
-            await interaction.response.send_message("❌ Tu as déjà un jeu emprunté, rends-le avant d'en emprunter un autre.", ephemeral=True)
-            return
-
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
@@ -117,8 +108,8 @@ class Emprunts(commands.Cog):
         if j[2]:
             await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
             return
-
         now = datetime.now().strftime("%d/%m/%Y")
+        emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
         c.execute(
             "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
             (emprunteur, now, j[0])
@@ -134,9 +125,6 @@ class Emprunts(commands.Cog):
         if not est_disponible():
             await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
             return
-
-        emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
-
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
@@ -144,15 +132,11 @@ class Emprunts(commands.Cog):
         if not j[2]:
             await interaction.response.send_message(f"❌ {j[1]} n’est pas emprunté.", ephemeral=True)
             return
-        if j[3] != emprunteur:
-            await interaction.response.send_message(f"❌ {j[1]} n’a pas été emprunté par toi.", ephemeral=True)
-            return
-
         c.execute("UPDATE jeux SET emprunte=0, emprunteur=NULL, date_emprunt=NULL WHERE id=?", (j[0],))
         conn.commit()
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}. Tu peux maintenant emprunter un autre jeu.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
