@@ -63,7 +63,7 @@ def format_liste(jeux):
     return "\n".join(lines)
 
 def find_jeu(identifiant):
-    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
+    c.execute("SELECT id, nom, emprunte FROM jeux")
     jeux = c.fetchall()
     identifiant = str(identifiant).lower()
     for j in jeux:
@@ -84,14 +84,15 @@ class Emprunts(commands.Cog):
         jeux = c.fetchall()
         msg = None
         async for m in channel.history(limit=50):
-            if m.author == self.bot.user:
+            if m.author == self.bot.user and m.pinned:
                 msg = m
                 break
         content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
         if msg:
             await msg.edit(content=content)
         else:
-            await channel.send(content)
+            new_msg = await channel.send(content)
+            await new_msg.pin()
 
     # --- COMMANDES SLASH ---
     @app_commands.command(name="emprunte", description="Emprunte un jeu")
