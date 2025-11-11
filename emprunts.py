@@ -8,21 +8,21 @@ import os
 # --------------------------
 # CONFIGURATION via variables d'environnement
 # --------------------------
-CANAL_ID = int(os.environ["CANAL_ID"])            # ID du canal Discord
-ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])  # ID du rôle Bureau
-DB_PATH = os.path.join("data", "jeux.db")        # chemin vers la base SQLite
+CANAL_ID = int(os.environ["CANAL_ID"])             # ID du canal Discord
+ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"]) # ID du rôle Bureau
+DB_PATH = os.path.join("data", "jeux.db")         # chemin vers la base SQLite
 
 # --------------------------
-# CRENEAUX D'EMPRUNT
+# CRÉNEAUX D'EMPRUNT
 # --------------------------
 CRENEAUX = [
-    {"jour": 2, "start": 0, "end": 24},  # mercredi 20h-00h
-    {"jour": 4, "start": 0, "end": 24},  # vendredi 20h-00h
-    {"jour": 6, "start": 0, "end": 24},  # dimanche 14h-18h
-    {"jour": 1, "start": 0, "end": 24},
-    {"jour": 3, "start": 0, "end": 24},
-    {"jour": 5, "start": 0, "end": 24},
-    {"jour": 0, "start": 0, "end": 24},
+    {"jour": 0, "start": 0, "end": 24},  # lundi
+    {"jour": 1, "start": 0, "end": 24},  # mardi
+    {"jour": 2, "start": 0, "end": 24},  # mercredi
+    {"jour": 3, "start": 0, "end": 24},  # jeudi
+    {"jour": 4, "start": 0, "end": 24},  # vendredi
+    {"jour": 5, "start": 0, "end": 24},  # samedi
+    {"jour": 6, "start": 0, "end": 24},  # dimanche
 ]
 
 # --------------------------
@@ -62,21 +62,6 @@ def format_liste(jeux):
         lines.append(f"**{j[0]}.** {status} {j[1]}{detail}")
     return "\n".join(lines)
 
-async def update_message(channel):
-    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
-    jeux = c.fetchall()
-    msg = None
-    async for m in channel.history(limit=50):
-        if m.author == channel.guild.me and m.pinned:
-            msg = m
-            break
-    content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
-    if msg:
-        await msg.edit(content=content)
-    else:
-        new_msg = await channel.send(content)
-        await new_msg.pin()
-
 def find_jeu(identifiant):
     c.execute("SELECT id, nom, emprunte FROM jeux")
     jeux = c.fetchall()
@@ -93,9 +78,23 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # ----------------------
-    # COMMANDES SLASH
-    # ----------------------
+    # --- FONCTION DE MISE À JOUR DU MESSAGE ---
+    async def update_message(self, channel):
+        c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
+        jeux = c.fetchall()
+        msg = None
+        async for m in channel.history(limit=50):
+            if m.author == self.bot.user and m.pinned:
+                msg = m
+                break
+        content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
+        if msg:
+            await msg.edit(content=content)
+        else:
+            new_msg = await channel.send(content)
+            await new_msg.pin()
+
+    # --- COMMANDES SLASH ---
     @app_commands.command(name="emprunte", description="Emprunte un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
@@ -113,7 +112,7 @@ class Emprunts(commands.Cog):
         c.execute("UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?", (interaction.user.name, now, j[0]))
         conn.commit()
         channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel)
+        await self.update_message(channel)
         await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
 
     @app_commands.command(name="rend", description="Rend un jeu")
@@ -132,7 +131,7 @@ class Emprunts(commands.Cog):
         c.execute("UPDATE jeux SET emprunte=0, emprunteur=NULL, date_emprunt=NULL WHERE id=?", (j[0],))
         conn.commit()
         channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel)
+        await self.update_message(channel)
         await interaction.response.send_message(f"✅ Tu as rendu {j[1]}.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
@@ -148,7 +147,7 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message("❌ Ce jeu existe déjà.", ephemeral=True)
             return
         channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel)
+        await self.update_message(channel)
         await interaction.response.send_message(f"✅ {jeu} ajouté.", ephemeral=True)
 
     @app_commands.command(name="retire", description="Retire un jeu (Bureau)")
@@ -164,14 +163,17 @@ class Emprunts(commands.Cog):
         c.execute("DELETE FROM jeux WHERE id=?", (j[0],))
         conn.commit()
         channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel)
+        await self.update_message(channel)
         await interaction.response.send_message(f"✅ {j[1]} retiré.", ephemeral=True)
 
     @app_commands.command(name="liste", description="Met à jour la liste des jeux")
     async def liste(self, interaction: discord.Interaction):
         channel = self.bot.get_channel(CANAL_ID)
-        await update_message(channel)
+        await self.update_message(channel)
         await interaction.response.send_message("✅ Liste mise à jour.", ephemeral=True)
 
+# --------------------------
+# SETUP
+# --------------------------
 async def setup(bot):
     await bot.add_cog(Emprunts(bot))
