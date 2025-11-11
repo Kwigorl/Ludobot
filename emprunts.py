@@ -55,7 +55,7 @@ def est_disponible():
     return False
 
 def get_jeux():
-    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux ORDER BY id")
+    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux ORDER BY nom COLLATE NOCASE")
     return c.fetchall()
 
 def format_liste(jeux):
