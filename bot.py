@@ -1,12 +1,12 @@
 import os
 import threading
-import asyncio
 from flask import Flask
 import discord
 from discord.ext import commands
+import asyncio
 
 # ----------------------
-# FLASK pour Render
+# FLASK pour Render (ping)
 # ----------------------
 app = Flask(__name__)
 
@@ -21,9 +21,9 @@ def run_flask():
 # ----------------------
 # DISCORD BOT
 # ----------------------
-TOKEN = os.environ.get("DISCORD_TOKEN")
-APPLICATION_ID = int(os.environ.get("DISCORD_APPLICATION_ID"))
-CANAL_ID = int(os.environ.get("CANAL_ID"))
+TOKEN = os.environ["DISCORD_TOKEN"]
+APPLICATION_ID = int(os.environ["DISCORD_APPLICATION_ID"])
+CANAL_ID = int(os.environ["CANAL_ID"])
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -32,47 +32,33 @@ intents.members = True  # nécessaire pour vérifier les rôles
 bot = commands.Bot(command_prefix=None, intents=intents, application_id=APPLICATION_ID)
 
 # ----------------------
-# COGS
-# ----------------------
-async def load_cogs():
-    try:
-        await bot.load_extension("emprunts")
-        print("Cog 'emprunts' chargé !")
-    except Exception as e:
-        print(f"Erreur lors du chargement du cog : {e}")
-
-# ----------------------
 # EVENTS
 # ----------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
-
-    # Synchronisation des slash commands
+    
+    # Synchronisation des commandes slash
     try:
-        synced = await bot.tree.sync()
-        print(f"{len(synced)} commandes slash synchronisées")
+        await bot.tree.sync()
+        print("Commandes slash synchronisées")
     except Exception as e:
         print(f"Erreur de synchronisation : {e}")
 
-    # Poste le message initial de la liste des jeux
-    try:
-        channel = bot.get_channel(CANAL_ID)
-        if channel is None:
-            print(f"ERREUR : impossible de trouver le canal avec ID {CANAL_ID}")
-        else:
-            print(f"Channel trouvé : {channel.name}")
-            # Cherche le cog emprunts
-            cog = bot.get_cog("Emprunts")
-            if cog is None:
-                print("ERREUR : le cog 'Emprunts' n'est pas chargé")
-            elif not hasattr(cog, "update_message"):
-                print("ERREUR : la fonction update_message n'existe pas dans le cog")
-            else:
-                await cog.update_message(channel, bot)
-                print("Message initial de la liste des jeux posté !")
-    except Exception as e:
-        print(f"ERREUR lors du post du message initial : {e}")
+    # Poster le message initial de la liste des jeux
+    channel = bot.get_channel(CANAL_ID)
+    if channel:
+        cog = bot.get_cog("Emprunts")
+        if cog:
+            await cog.update_message(channel)
+            print("Message initial de liste des jeux posté")
+
+# ----------------------
+# COGS
+# ----------------------
+async def load_cogs():
+    await bot.load_extension("emprunts")
+    print("Cog 'emprunts' chargé !")
 
 # ----------------------
 # LANCEMENT
@@ -80,6 +66,7 @@ async def on_ready():
 if __name__ == "__main__":
     # Flask dans un thread séparé
     threading.Thread(target=run_flask).start()
-    # Charge les cogs et démarre le bot
+    
+    # Charger les cogs et lancer le bot
     asyncio.run(load_cogs())
     bot.run(TOKEN)
