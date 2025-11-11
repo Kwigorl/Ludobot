@@ -63,7 +63,7 @@ def format_liste(jeux):
     return "\n".join(lines)
 
 def find_jeu(identifiant):
-    c.execute("SELECT id, nom, emprunte FROM jeux")
+    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
     jeux = c.fetchall()
     identifiant = str(identifiant).lower()
     for j in jeux:
@@ -84,15 +84,14 @@ class Emprunts(commands.Cog):
         jeux = c.fetchall()
         msg = None
         async for m in channel.history(limit=50):
-            if m.author == self.bot.user and m.pinned:
+            if m.author == self.bot.user:
                 msg = m
                 break
         content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
         if msg:
             await msg.edit(content=content)
         else:
-            new_msg = await channel.send(content)
-            await new_msg.pin()
+            await channel.send(content)
 
     # --- COMMANDES SLASH ---
     @app_commands.command(name="emprunte", description="Emprunte un jeu")
@@ -111,9 +110,14 @@ class Emprunts(commands.Cog):
         now = datetime.now().strftime("%d/%m/%Y")
         emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
         c.execute(
-        "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
-        (emprunteur, now, j[0])
+            "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
+            (emprunteur, now, j[0])
         )
+        conn.commit()
+        channel = self.bot.get_channel(CANAL_ID)
+        await self.update_message(channel)
+        await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
+
     @app_commands.command(name="rend", description="Rend un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
