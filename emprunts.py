@@ -16,7 +16,7 @@ DB_PATH = os.path.join("data", "jeux.db")
 # CRÉNEAUX D'EMPRUNT
 # --------------------------
 CRENEAUX = [
-    {"jour": 0, "start": 0, "end": 24},  # lundi
+    {"jour": 0, "start": 0, "end": 24},
     {"jour": 1, "start": 0, "end": 24},
     {"jour": 2, "start": 0, "end": 24},
     {"jour": 3, "start": 0, "end": 24},
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS jeux (
     nom TEXT UNIQUE,
     emprunte INTEGER DEFAULT 0,
     emprunteur TEXT,
+    emprunteur_id INTEGER,
     date_emprunt TEXT
 )
 ''')
@@ -55,34 +56,36 @@ def est_disponible():
     return False
 
 def get_jeux():
-    c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux ORDER BY nom COLLATE NOCASE")
+    c.execute("SELECT id, nom, emprunte, emprunteur, emprunteur_id, date_emprunt FROM jeux ORDER BY nom COLLATE NOCASE")
     return c.fetchall()
 
 def format_liste(jeux):
     lines = []
     for idx, j in enumerate(jeux, start=1):
         if j[2]:  # emprunté
-            lines.append(f"**{idx}.** {j[1]} (emprunté par {j[3]} le {j[4]})")
-        else:      # disponible
+            # si on a un ID utilisateur, on l’affiche comme mention Discord
+            if j[4]:
+                lines.append(f"**{idx}.** {j[1]} (emprunté par <@{j[4]}> le {j[5]})")
+            else:
+                lines.append(f"**{idx}.** {j[1]} (emprunté par {j[3]} le {j[5]})")
+        else:  # disponible
             lines.append(f"**{idx}.** {j[1]}")
     return "\n".join(lines)
 
 def find_jeu(user_input):
     jeux = get_jeux()
-    # si c’est un nombre et valide, on prend le numéro affiché
     if user_input.isdigit():
         idx = int(user_input) - 1
         if 0 <= idx < len(jeux):
             return jeux[idx]
-    # sinon, recherche par nom (partiel)
     user_input = user_input.lower()
     for j in jeux:
         if user_input in j[1].lower():
             return j
     return None
 
-def user_a_emprunt(user):
-    c.execute("SELECT COUNT(*) FROM jeux WHERE emprunteur=?", (user,))
+def user_a_emprunt(user_id):
+    c.execute("SELECT COUNT(*) FROM jeux WHERE emprunteur_id=?", (user_id,))
     return c.fetchone()[0] > 0
 
 # --------------------------
@@ -92,10 +95,17 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # --- FONCTION DE MISE À JOUR DU MESSAGE ---
     async def update_message(self, channel):
         jeux = get_jeux()
-        content = "**😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?**\n\n""📆 Vous pouvez en emprunter **1 par utilisateur·rice Discord, pendant 2 semaines.**\n\n""📤 Pour cela, tapez ici la commande **/emprunt [Numéro du jeu]** (ex : /emprunt 3).\n\n""📥 Quand vous ramènerez le jeu, tapez ici la commande **/retour [Numéro du jeu]** (ex : /retour 3).\n\n""**🎲 Jeux disponibles :**\n\n" + format_liste(jeux)
+        content = (
+            "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
+            "📆 Vous pouvez en emprunter **1 par utilisateur·rice Discord**, pendant 2 semaines.\n\n"
+            "📤 Pour emprunter : tapez `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
+            "📥 Pour le rendre : tapez `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
+            "🎲 **Jeux disponibles :**\n\n"
+            + format_liste(jeux)
+        )
+
         msg = None
         async for m in channel.history(limit=50):
             if m.author == self.bot.user:
@@ -106,17 +116,21 @@ class Emprunts(commands.Cog):
         else:
             await channel.send(content)
 
-    # --- COMMANDES SLASH ---
+    # --- Commandes ---
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
         if not est_disponible():
             await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
             return
-        emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
-        if user_a_emprunt(emprunteur):
+
+        user_id = interaction.user.id
+        display_name = interaction.user.display_name
+
+        if user_a_emprunt(user_id):
             await interaction.response.send_message("❌ Tu as déjà un jeu emprunté.", ephemeral=True)
             return
+
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
@@ -124,9 +138,14 @@ class Emprunts(commands.Cog):
         if j[2]:
             await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
             return
+
         now = datetime.now().strftime("%d/%m/%Y")
-        c.execute("UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?", (emprunteur, now, j[0]))
+        c.execute(
+            "UPDATE jeux SET emprunte=1, emprunteur=?, emprunteur_id=?, date_emprunt=? WHERE id=?",
+            (display_name, user_id, now, j[0])
+        )
         conn.commit()
+
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
@@ -137,6 +156,7 @@ class Emprunts(commands.Cog):
         if not est_disponible():
             await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
             return
+
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
@@ -144,11 +164,13 @@ class Emprunts(commands.Cog):
         if not j[2]:
             await interaction.response.send_message(f"❌ {j[1]} n’est pas emprunté.", ephemeral=True)
             return
-        c.execute("UPDATE jeux SET emprunte=0, emprunteur=NULL, date_emprunt=NULL WHERE id=?", (j[0],))
+
+        c.execute("UPDATE jeux SET emprunte=0, emprunteur=NULL, emprunteur_id=NULL, date_emprunt=NULL WHERE id=?", (j[0],))
         conn.commit()
+
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}. Tu peux maintenant emprunter un autre jeu.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
@@ -162,6 +184,7 @@ class Emprunts(commands.Cog):
         except sqlite3.IntegrityError:
             await interaction.response.send_message("❌ Ce jeu existe déjà.", ephemeral=True)
             return
+
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(f"✅ {jeu} ajouté.", ephemeral=True)
@@ -172,12 +195,15 @@ class Emprunts(commands.Cog):
         if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
             await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
+
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
+
         c.execute("DELETE FROM jeux WHERE id=?", (j[0],))
         conn.commit()
+
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(f"✅ {j[1]} retiré.", ephemeral=True)
@@ -187,6 +213,7 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message("✅ Liste mise à jour.", ephemeral=True)
+
 
 # --------------------------
 # SETUP
