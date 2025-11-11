@@ -34,16 +34,24 @@ bot = commands.Bot(command_prefix=None, intents=intents)
 # EVENTS
 # ----------------------
 @bot.event
+@bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
 
-    # Charge le cog
+    # Poste le message initial de la liste
     try:
-        if "Emprunts" not in bot.cogs:
-            await bot.load_extension("emprunts")
-            print("Cog 'emprunts' chargé !")
+        channel = bot.get_channel(CANAL_ID)
+        if channel is None:
+            print(f"ERREUR : impossible de trouver le canal avec ID {CANAL_ID}")
+        else:
+            print(f"Channel trouvé : {channel.name}")
+            for cog in bot.cogs.values():
+                print(f"Cog détecté : {cog}")
+                if hasattr(cog, "update_message"):
+                    await cog.update_message(channel, bot)
+                    print("Message initial posté !")
     except Exception as e:
-        print(f"Erreur chargement cog : {e}")
+        print(f"ERREUR lors du post du message initial : {e}")
 
     # Synchronisation des slash commands
     try:
