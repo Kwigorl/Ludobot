@@ -65,11 +65,11 @@ def format_liste(jeux):
         if j[2]:  # emprunté
             # si on a un ID utilisateur, on l’affiche comme mention Discord
             if j[4]:
-                lines.append(f"**{idx}.** {j[1]} (emprunté par <@{j[4]}> le {j[5]})")
+                lines.append(f"> **{idx}.** {j[1]} *(emprunté par <@{j[4]}> le {j[5]})*")
             else:
-                lines.append(f"**{idx}.** {j[1]} (emprunté par {j[3]} le {j[5]})")
+                lines.append(f"> **{idx}.** {j[1]} *(emprunté par {j[3]} le {j[5]})*")
         else:  # disponible
-            lines.append(f"**{idx}.** {j[1]}")
+            lines.append(f"> **{idx}.** {j[1]}")
     return "\n".join(lines)
 
 def find_jeu(user_input):
