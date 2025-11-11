@@ -109,16 +109,11 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
             return
         now = datetime.now().strftime("%d/%m/%Y")
-       emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
+        emprunteur = interaction.user.display_name if hasattr(interaction.user, "display_name") else interaction.user.name
         c.execute(
-    "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
-    (emprunteur, now, j[0])
-)
-        conn.commit()
-        channel = self.bot.get_channel(CANAL_ID)
-        await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as emprunté {j[1]} le {now}.", ephemeral=True)
-
+        "UPDATE jeux SET emprunte=1, emprunteur=?, date_emprunt=? WHERE id=?",
+        (emprunteur, now, j[0])
+        )
     @app_commands.command(name="rend", description="Rend un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
