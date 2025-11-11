@@ -21,25 +21,45 @@ def run_flask():
 # ----------------------
 # DISCORD BOT
 # ----------------------
+TOKEN = os.environ.get("DISCORD_TOKEN")
+APPLICATION_ID = int(os.environ.get("DISCORD_APPLICATION_ID"))
+
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True  # nécessaire pour vérifier les rôles Bureau
-bot = commands.Bot(command_prefix=None, intents=intents)
 
-async def start_discord_bot():
-    TOKEN = os.environ.get("DISCORD_TOKEN")
-    if not TOKEN:
-        print("Erreur : DISCORD_TOKEN manquant")
-        return
-    # Charge le cog
+bot = commands.Bot(
+    command_prefix=None,
+    intents=intents,
+    application_id=APPLICATION_ID
+)
+
+# ----------------------
+# EVENTS
+# ----------------------
+@bot.event
+async def on_ready():
+    print(f"{bot.user} connecté !")
+    # Synchronisation des commandes slash
+    try:
+        await bot.tree.sync()
+        print(f"Commandes slash synchronisées")
+    except Exception as e:
+        print(f"Erreur de synchronisation : {e}")
+
+# ----------------------
+# COGS
+# ----------------------
+async def load_cogs():
     await bot.load_extension("emprunts")
-    # Synchronise les slash commands
-    await bot.tree.sync()
-    print("Bot Discord démarré, commandes slash synchronisées.")
-    await bot.start(TOKEN)
+    print("Cog 'emprunts' chargé !")
 
+# ----------------------
+# LANCEMENT
+# ----------------------
 if __name__ == "__main__":
     # Flask dans un thread séparé
     threading.Thread(target=run_flask).start()
-    # Bot Discord dans le thread principal
-    asyncio.run(start_discord_bot())
+    # Bot Discord
+    asyncio.run(load_cogs())
+    bot.run(TOKEN)
