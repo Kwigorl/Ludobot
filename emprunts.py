@@ -56,10 +56,10 @@ def est_disponible():
 
 def format_liste(jeux):
     lines = []
-    for j in jeux:
+    for idx, j in enumerate(jeux, start=1):
         status = "✅" if j[2] == 0 else "❌"
         detail = f" (emprunté par {j[3]} le {j[4]})" if j[2] else ""
-        lines.append(f"**{j[0]}.** {status} {j[1]}{detail}")
+        lines.append(f"**{idx}.** {status} {j[1]}{detail}")
     return "\n".join(lines)
 
 def find_jeu(identifiant):
@@ -78,21 +78,27 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # --- ON_READY pour mise à jour automatique au démarrage ---
+    @commands.Cog.listener()
+    async def on_ready(self):
+        channel = self.bot.get_channel(CANAL_ID)
+        if channel:
+            await self.update_message(channel)
+
     # --- FONCTION DE MISE À JOUR DU MESSAGE ---
     async def update_message(self, channel):
         c.execute("SELECT id, nom, emprunte, emprunteur, date_emprunt FROM jeux")
         jeux = c.fetchall()
         msg = None
         async for m in channel.history(limit=50):
-            if m.author == self.bot.user and m.pinned:
+            if m.author == self.bot.user:
                 msg = m
                 break
         content = "🎲 **Jeux disponibles :**\n\n" + format_liste(jeux)
         if msg:
             await msg.edit(content=content)
         else:
-            new_msg = await channel.send(content)
-            await new_msg.pin()
+            await channel.send(content)  # plus d'épinglage
 
     # --- COMMANDES SLASH ---
     @app_commands.command(name="emprunte", description="Emprunte un jeu")
