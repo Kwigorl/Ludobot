@@ -29,7 +29,8 @@ intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True  # nécessaire pour vérifier les rôles
 
-bot = commands.Bot(command_prefix=None, intents=intents, application_id=APPLICATION_ID)
+# Slash-only → préfixe vide
+bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATION_ID)
 
 # ----------------------
 # EVENTS
@@ -46,15 +47,12 @@ async def on_ready():
         print(f"Erreur de synchronisation : {e}")
 
     # Poster le message initial de la liste des jeux
-    from emprunts import Emprunts  # importer ici pour éviter problème de circular import
-    cog = bot.get_cog("Emprunts")
-    if cog is None:
-        await bot.add_cog(Emprunts(bot))
-        cog = bot.get_cog("Emprunts")
     channel = bot.get_channel(CANAL_ID)
     if channel:
-        await cog.update_message(channel)
-        print("Message initial de liste des jeux posté")
+        cog = bot.get_cog("Emprunts")
+        if cog:
+            await cog.update_message(channel)
+            print("Message initial de liste des jeux posté")
 
 # ----------------------
 # COGS
