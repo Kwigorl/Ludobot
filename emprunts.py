@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 from datetime import datetime, timedelta
-from supabase import create_client, Client
+from supabase import create_client
 
 # --------------------------
 # CONFIGURATION via variables d'environnement
@@ -17,7 +17,7 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 # --------------------------
 # INITIALISATION SUPABASE
 # --------------------------
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --------------------------
 # CRÉNEAUX D'EMPRUNT
