@@ -37,14 +37,13 @@ def est_disponible():
     return False
 
 def get_jeux():
-    # La méthode moderne pour trier sur Supabase
     response = supabase.table("jeux").select("*").order("nom", desc=False).execute()
     return response.data
 
 def format_liste(jeux):
     lines = []
     for idx, j in enumerate(jeux, start=1):
-        if j["emprunte"]:  # emprunté
+        if j["emprunte"]:
             start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             if j["emprunteur_id"]:
@@ -104,30 +103,30 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
+        await interaction.response.defer(ephemeral=True)
+
         if not est_disponible():
-            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
+            await interaction.followup.send("⏰ Service fermé pour le moment.", ephemeral=True)
             return
 
         user_id = interaction.user.id
         display_name = interaction.user.display_name
 
         if user_a_emprunt(user_id):
-            # Récupère le jeu déjà emprunté par l'utilisateur
             jeu_emprunte = None
-            
             response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
             if response.data:
                 jeu_emprunte = response.data[0]
-    
+
             if jeu_emprunte:
                 jeux = get_jeux()
                 numero = next((i+1 for i, j in enumerate(jeux) if j["id"] == jeu_emprunte["id"]), "?")
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°**{numero}**).",
                     ephemeral=True
                 )
             else:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "❌ Tu as déjà un jeu emprunté.",
                     ephemeral=True
                 )
@@ -135,10 +134,10 @@ class Emprunts(commands.Cog):
 
         j = find_jeu(jeu)
         if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
             return
         if j["emprunte"]:
-            await interaction.response.send_message(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
+            await interaction.followup.send(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
             return
 
         now = datetime.now().isoformat()
@@ -151,7 +150,7 @@ class Emprunts(commands.Cog):
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"✅ Tu as emprunté **{j['nom']}**. Date de retour max : {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
             ephemeral=True
         )
@@ -159,17 +158,19 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="retour", description="Rend un jeu que tu as emprunté")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
+        await interaction.response.defer(ephemeral=True)
+
         j = find_jeu(jeu)
         if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
             return
         if not j["emprunte"]:
-            await interaction.response.send_message(f"❌ {j['nom']} n’est pas emprunté.", ephemeral=True)
+            await interaction.followup.send(f"❌ {j['nom']} n’est pas emprunté.", ephemeral=True)
             return
 
         if j["emprunteur_id"] != interaction.user.id:
             emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ **{j['nom']}** est emprunté par {emprunteur_tag}, tu ne peux pas le retourner.",
                 ephemeral=True
             )
@@ -184,44 +185,50 @@ class Emprunts(commands.Cog):
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as retourné **{j['nom']}**.", ephemeral=True)
+        await interaction.followup.send(f"✅ Tu as retourné **{j['nom']}**.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
     async def ajout(self, interaction: discord.Interaction, jeu: str):
+        await interaction.response.defer(ephemeral=True)
+
         if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
+            await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
             return
 
         supabase.table("jeux").insert({"nom": jeu}).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ {jeu} ajouté.", ephemeral=True)
+        await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
 
     @app_commands.command(name="retrait", description="Retire un jeu (Bureau)")
     @app_commands.describe(jeu="Nom ou numéro du jeu à retirer")
     async def retire(self, interaction: discord.Interaction, jeu: str):
+        await interaction.response.defer(ephemeral=True)
+
         if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
+            await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
             return
 
         j = find_jeu(jeu)
         if not j:
-            await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
             return
 
         supabase.table("jeux").delete().eq("id", j["id"]).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ {j['nom']} retiré.", ephemeral=True)
+        await interaction.followup.send(f"✅ {j['nom']} retiré.", ephemeral=True)
 
     @app_commands.command(name="liste", description="Met à jour la liste des jeux")
     async def liste(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message("✅ Liste mise à jour.", ephemeral=True)
+        await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
 
 # --------------------------
 # SETUP
