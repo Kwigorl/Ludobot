@@ -46,12 +46,15 @@ async def on_ready():
         print(f"Erreur de synchronisation : {e}")
 
     # Poster le message initial de la liste des jeux
+    from emprunts import Emprunts  # importer ici pour éviter problème de circular import
+    cog = bot.get_cog("Emprunts")
+    if cog is None:
+        await bot.add_cog(Emprunts(bot))
+        cog = bot.get_cog("Emprunts")
     channel = bot.get_channel(CANAL_ID)
     if channel:
-        cog = bot.get_cog("Emprunts")
-        if cog:
-            await cog.update_message(channel)
-            print("Message initial de liste des jeux posté")
+        await cog.update_message(channel)
+        print("Message initial de liste des jeux posté")
 
 # ----------------------
 # COGS
@@ -70,4 +73,3 @@ if __name__ == "__main__":
     # Charger les cogs et lancer le bot
     asyncio.run(load_cogs())
     bot.run(TOKEN)
-    
