@@ -112,8 +112,23 @@ class Emprunts(commands.Cog):
         display_name = interaction.user.display_name
 
         if user_a_emprunt(user_id):
-            await interaction.response.send_message("❌ Tu as déjà un jeu emprunté.", ephemeral=True)
-            return
+            # Récupère le jeu déjà emprunté par l'utilisateur
+            response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
+            jeu_emprunte = response.data[0] if response.data else None
+    
+        if jeu_emprunte:
+            jeux = get_jeux()
+            numero = next((i+1 for i, j in enumerate(jeux) if j["id"] == jeu_emprunte["id"]), "?")
+            await interaction.response.send_message(
+                f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°{numero}).",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "❌ Tu as déjà un jeu emprunté.",
+                ephemeral=True
+            )
+        return
 
         j = find_jeu(jeu)
         if not j:
@@ -134,11 +149,11 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(
-            f"✅ Tu as emprunté {j['nom']} du {datetime.fromisoformat(now).strftime('%d/%m')} au {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
+            f"✅ Tu as emprunté {j['nom']} le {datetime.fromisoformat(now).strftime('%d/%m')}. Date de retour max : {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
             ephemeral=True
         )
 
-    @app_commands.command(name="retour", description="Rend un jeu")
+    @app_commands.command(name="retour", description="Rend un jeu que tu as emprunté")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
         j = find_jeu(jeu)
@@ -147,6 +162,14 @@ class Emprunts(commands.Cog):
             return
         if not j["emprunte"]:
             await interaction.response.send_message(f"❌ {j['nom']} n’est pas emprunté.", ephemeral=True)
+            return
+
+        if j["emprunteur_id"] != interaction.user.id:
+            emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
+            await interaction.response.send_message(
+                f"❌ {j['nom']} est emprunté par {emprunteur_tag}, tu ne peux pas le rendre.",
+                ephemeral=True
+            )
             return
 
         supabase.table("jeux").update({
@@ -158,7 +181,7 @@ class Emprunts(commands.Cog):
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as rendu {j['nom']}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Tu as retourné {j['nom']}.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
