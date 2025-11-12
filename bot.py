@@ -70,3 +70,4 @@ if __name__ == "__main__":
     # Charger les cogs et lancer le bot
     asyncio.run(load_cogs())
     bot.run(TOKEN)
+    
