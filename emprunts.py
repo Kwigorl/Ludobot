@@ -138,7 +138,7 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
         if j["emprunte"]:
-            await interaction.response.send_message(f"❌ $${j['nom']}$$ est déjà emprunté.", ephemeral=True)
+            await interaction.response.send_message(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
             return
 
         now = datetime.now().isoformat()
