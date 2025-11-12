@@ -123,7 +123,7 @@ class Emprunts(commands.Cog):
                 jeux = get_jeux()
                 numero = next((i+1 for i, j in enumerate(jeux) if j["id"] == jeu_emprunte["id"]), "?")
                 await interaction.response.send_message(
-                    f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°{numero}).",
+                    f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°**{numero}**).",
                     ephemeral=True
                 )
             else:
@@ -138,7 +138,7 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
         if j["emprunte"]:
-            await interaction.response.send_message(f"❌ {j['nom']} est déjà emprunté.", ephemeral=True)
+            await interaction.response.send_message(f"❌ $${j['nom']}$$ est déjà emprunté.", ephemeral=True)
             return
 
         now = datetime.now().isoformat()
@@ -152,7 +152,7 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(
-            f"✅ Tu as emprunté {j['nom']} le {datetime.fromisoformat(now).strftime('%d/%m')}. Date de retour max : {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
+            f"✅ Tu as emprunté **{j['nom']}**. Date de retour max : {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
             ephemeral=True
         )
 
@@ -170,7 +170,7 @@ class Emprunts(commands.Cog):
         if j["emprunteur_id"] != interaction.user.id:
             emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
             await interaction.response.send_message(
-                f"❌ {j['nom']} est emprunté par {emprunteur_tag}, tu ne peux pas le rendre.",
+                f"❌ **{j['nom']}** est emprunté par {emprunteur_tag}, tu ne peux pas le retourner.",
                 ephemeral=True
             )
             return
@@ -184,7 +184,7 @@ class Emprunts(commands.Cog):
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as retourné {j['nom']}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Tu as retourné **{j['nom']}**.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
