@@ -47,9 +47,9 @@ def format_liste(jeux):
             start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             if j["emprunteur_id"]:
-                lines.append(f"> **{idx}.** {j['nom']} *(emprunté par <@{j['emprunteur_id']}> du {start_date} au {end_date})*")
+                lines.append(f"> **{idx}.** ~~{j['nom']}~~ *(<@{j['emprunteur_id']}> du {start_date} au {end_date})*")
             else:
-                lines.append(f"> **{idx}.** {j['nom']} *(emprunté par {j['emprunteur']} du {start_date} au {end_date})*")
+                lines.append(f"> **{idx}.** ~~{j['nom']}~~ *({j['emprunteur']} du {start_date} au {end_date})*")
         else:
             lines.append(f"> **{idx}.** {j['nom']}")
     return "\n".join(lines)
@@ -83,9 +83,9 @@ class Emprunts(commands.Cog):
             "\n"
             "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
             "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
-            "📤 Quand vous l'empruntez : tapez ici `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
-            "📥 Quand vous le retournez : tapez ici `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
-            "🎲 Jeux disponibles :\n\n"
+            "📤 Quand vous l'empruntez, tapez ici : `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
+            "📥 Quand vous le retournez, tapez ici : `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
+            "🎲 Jeux empruntables :\n\n"
             + format_liste(jeux)
         )
 
