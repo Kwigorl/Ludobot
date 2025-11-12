@@ -37,7 +37,8 @@ def est_disponible():
     return False
 
 def get_jeux():
-    response = supabase.table("jeux").select("*").order("nom", ascending=True).execute()
+    # La méthode moderne pour trier sur Supabase
+    response = supabase.table("jeux").select("*").order("nom", ascending="asc").execute()
     return response.data
 
 def format_liste(jeux):
