@@ -1,4 +1,4 @@
 discord.py>=2.6.0
 flask
-supabase-py>=1.0.3
+supabase>=2.4.0
 python-dotenv
