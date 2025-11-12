@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 from datetime import datetime, timedelta
-import psycopg2
+from supabase import create_client, Client
 
 # --------------------------
 # CONFIGURATION via variables d'environnement
@@ -11,31 +11,22 @@ import psycopg2
 CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
 
-DB_HOST = os.environ["DB_HOST"]
-DB_PORT = os.environ["DB_PORT"]
-DB_NAME = os.environ["DB_NAME"]
-DB_USER = os.environ["DB_USER"]
-DB_PASSWORD = os.environ["DB_PASSWORD"]
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+
+# --------------------------
+# INITIALISATION SUPABASE
+# --------------------------
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --------------------------
 # CRÉNEAUX D'EMPRUNT
 # --------------------------
-CRENEAUX = [
-    {"jour": i, "start": 0, "end": 24} for i in range(7)
-]
+CRENEAUX = [{"jour": i, "start": 0, "end": 24} for i in range(7)]
 
 # --------------------------
-# FONCTIONS DB
+# FONCTIONS UTILES
 # --------------------------
-def get_conn():
-    return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
-
 def est_disponible():
     now = datetime.now()
     jour = now.weekday()
@@ -46,26 +37,21 @@ def est_disponible():
     return False
 
 def get_jeux():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, nom, emprunte, emprunteur, emprunteur_id, date_emprunt FROM jeux ORDER BY nom COLLATE NOCASE")
-    jeux = cur.fetchall()
-    cur.close()
-    conn.close()
-    return jeux
+    response = supabase.table("jeux").select("*").order("nom", ascending=True).execute()
+    return response.data
 
 def format_liste(jeux):
     lines = []
     for idx, j in enumerate(jeux, start=1):
-        if j[2]:  # emprunté
-            start_date = j[5].strftime("%d/%m") if j[5] else "??/??"
-            end_date = (j[5] + timedelta(days=14)).strftime("%d/%m") if j[5] else "??/??"
-            if j[4]:
-                lines.append(f"> **{idx}.** {j[1]} *(emprunté par <@{j[4]}> du {start_date} au {end_date})*")
+        if j["emprunte"]:  # emprunté
+            start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
+            end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
+            if j["emprunteur_id"]:
+                lines.append(f"> **{idx}.** {j['nom']} *(emprunté par <@{j['emprunteur_id']}> du {start_date} au {end_date})*")
             else:
-                lines.append(f"> **{idx}.** {j[1]} *(emprunté par {j[3]} du {start_date} au {end_date})*")
-        else:  # disponible
-            lines.append(f"> **{idx}.** {j[1]}")
+                lines.append(f"> **{idx}.** {j['nom']} *(emprunté par {j['emprunteur']} du {start_date} au {end_date})*")
+        else:
+            lines.append(f"> **{idx}.** {j['nom']}")
     return "\n".join(lines)
 
 def find_jeu(user_input):
@@ -76,18 +62,13 @@ def find_jeu(user_input):
             return jeux[idx]
     user_input = user_input.lower()
     for j in jeux:
-        if user_input in j[1].lower():
+        if user_input in j["nom"].lower():
             return j
     return None
 
 def user_a_emprunt(user_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM jeux WHERE emprunteur_id=%s", (user_id,))
-    result = cur.fetchone()[0] > 0
-    cur.close()
-    conn.close()
-    return result
+    response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
+    return len(response.data) > 0
 
 # --------------------------
 # COG
@@ -137,56 +118,46 @@ class Emprunts(commands.Cog):
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
-        if j[2]:
-            await interaction.response.send_message(f"❌ {j[1]} est déjà emprunté.", ephemeral=True)
+        if j["emprunte"]:
+            await interaction.response.send_message(f"❌ {j['nom']} est déjà emprunté.", ephemeral=True)
             return
 
-        now = datetime.now()
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE jeux SET emprunte=TRUE, emprunteur=%s, emprunteur_id=%s, date_emprunt=%s WHERE id=%s",
-            (display_name, user_id, now, j[0])
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
+        now = datetime.now().isoformat()
+        supabase.table("jeux").update({
+            "emprunte": True,
+            "emprunteur": display_name,
+            "emprunteur_id": user_id,
+            "date_emprunt": now
+        }).eq("id", j["id"]).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.response.send_message(
-            f"✅ Tu as emprunté {j[1]} du {now.strftime('%d/%m')} au {(now + timedelta(days=14)).strftime('%d/%m')}.",
+            f"✅ Tu as emprunté {j['nom']} du {datetime.fromisoformat(now).strftime('%d/%m')} au {(datetime.fromisoformat(now) + timedelta(days=14)).strftime('%d/%m')}.",
             ephemeral=True
         )
 
     @app_commands.command(name="retour", description="Rend un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
-        if not est_disponible():
-            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
-            return
-
         j = find_jeu(jeu)
         if not j:
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
-        if not j[2]:
-            await interaction.response.send_message(f"❌ {j[1]} n’est pas emprunté.", ephemeral=True)
+        if not j["emprunte"]:
+            await interaction.response.send_message(f"❌ {j['nom']} n’est pas emprunté.", ephemeral=True)
             return
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE jeux SET emprunte=FALSE, emprunteur=NULL, emprunteur_id=NULL, date_emprunt=NULL WHERE id=%s",
-            (j[0],)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
+        supabase.table("jeux").update({
+            "emprunte": False,
+            "emprunteur": None,
+            "emprunteur_id": None,
+            "date_emprunt": None
+        }).eq("id", j["id"]).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ Tu as rendu {j[1]}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Tu as rendu {j['nom']}.", ephemeral=True)
 
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     @app_commands.describe(jeu="Nom du jeu à ajouter")
@@ -195,18 +166,7 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
 
-        conn = get_conn()
-        cur = conn.cursor()
-        try:
-            cur.execute("INSERT INTO jeux(nom) VALUES(%s)", (jeu,))
-            conn.commit()
-        except psycopg2.errors.UniqueViolation:
-            await interaction.response.send_message("❌ Ce jeu existe déjà.", ephemeral=True)
-            cur.close()
-            conn.close()
-            return
-        cur.close()
-        conn.close()
+        supabase.table("jeux").insert({"nom": jeu}).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
@@ -224,16 +184,11 @@ class Emprunts(commands.Cog):
             await interaction.response.send_message("❌ Jeu introuvable.", ephemeral=True)
             return
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM jeux WHERE id=%s", (j[0],))
-        conn.commit()
-        cur.close()
-        conn.close()
+        supabase.table("jeux").delete().eq("id", j["id"]).execute()
 
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
-        await interaction.response.send_message(f"✅ {j[1]} retiré.", ephemeral=True)
+        await interaction.response.send_message(f"✅ {j['nom']} retiré.", ephemeral=True)
 
     @app_commands.command(name="liste", description="Met à jour la liste des jeux")
     async def liste(self, interaction: discord.Interaction):
