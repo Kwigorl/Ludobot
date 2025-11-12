@@ -2,7 +2,7 @@ import os
 import threading
 from flask import Flask
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import asyncio
 
 # ----------------------
@@ -27,10 +27,9 @@ CANAL_ID = int(os.environ["CANAL_ID"])
 
 intents = discord.Intents.default()
 intents.guilds = True
-intents.members = True  # nécessaire pour vérifier les rôles
+intents.members = True
 intents.message_content = True
 
-# Slash-only → préfixe vide
 bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATION_ID)
 
 # ----------------------
@@ -54,6 +53,29 @@ async def on_ready():
         if cog:
             await cog.update_message(channel)
             print("Message initial de liste des jeux posté")
+
+    # Démarrer la suppression automatique des messages
+    delete_non_command_messages.start()
+
+# ----------------------
+# SUPPRESSION DES MESSAGES NON-COMMANDES
+# ----------------------
+@tasks.loop(seconds=1)
+async def delete_non_command_messages():
+    channel = bot.get_channel(CANAL_ID)
+    if not channel:
+        return
+    try:
+        async for message in channel.history(limit=50):
+            if message.author != bot.user and not message.content.startswith("/"):
+                try:
+                    await message.delete()
+                except discord.Forbidden:
+                    print(f"⚠️ Impossible de supprimer un message dans #{channel} (permissions manquantes)")
+                except Exception as e:
+                    print(f"Erreur suppression message : {e}")
+    except Exception as e:
+        print(f"Erreur boucle suppression messages : {e}")
 
 # ----------------------
 # COGS
