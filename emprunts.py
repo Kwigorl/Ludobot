@@ -113,22 +113,25 @@ class Emprunts(commands.Cog):
 
         if user_a_emprunt(user_id):
             # Récupère le jeu déjà emprunté par l'utilisateur
+            jeu_emprunte = None
+            
             response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
-            jeu_emprunte = response.data[0] if response.data else None
+            if response.data:
+                jeu_emprunte = response.data[0]
     
-        if jeu_emprunte:
-            jeux = get_jeux()
-            numero = next((i+1 for i, j in enumerate(jeux) if j["id"] == jeu_emprunte["id"]), "?")
-            await interaction.response.send_message(
-                f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°{numero}).",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                "❌ Tu as déjà un jeu emprunté.",
-                ephemeral=True
-            )
-        return
+            if jeu_emprunte:
+                jeux = get_jeux()
+                numero = next((i+1 for i, j in enumerate(jeux) if j["id"] == jeu_emprunte["id"]), "?")
+                await interaction.response.send_message(
+                    f"❌ Tu as déjà emprunté **{jeu_emprunte['nom']}** (jeu n°{numero}).",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ Tu as déjà un jeu emprunté.",
+                    ephemeral=True
+                )
+            return
 
         j = find_jeu(jeu)
         if not j:
