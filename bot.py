@@ -28,6 +28,7 @@ CANAL_ID = int(os.environ["CANAL_ID"])
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True  # nécessaire pour vérifier les rôles
+intents.message_content = True
 
 # Slash-only → préfixe vide
 bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATION_ID)
