@@ -78,26 +78,34 @@ class Emprunts(commands.Cog):
         self.bot = bot
 
     async def update_message(self, channel):
-        jeux = get_jeux()
-        content = (
-            "\n"
-            "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
-            "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
-            "📤 Quand vous l'empruntez, tapez ici : `/emprunt [numéro du jeu]` (ex : `/emprunt 3`).\n"
-            "📥 Quand vous le retournez, tapez ici : `/retour [numéro du jeu]` (ex : `/retour 3`).\n\n"
-            "🎲 Jeux empruntables :\n\n"
-            + format_liste(jeux)
-        )
+    jeux = get_jeux()
+    description = (
+        "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
+        "📆 Vous pouvez en emprunter **1** par utilisateur·rice Discord, pendant **2 semaines**.\n\n"
+        "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
+        "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n\n"
+        "🎲 **Jeux empruntables :**\n\n"
+        + format_liste(jeux)
+    )
 
-        msg = None
-        async for m in channel.history(limit=50):
-            if m.author == self.bot.user:
-                msg = m
-                break
-        if msg:
-            await msg.edit(content=content)
-        else:
-            await channel.send(content)
+    embed = discord.Embed(
+        title="📚 Emprunts de jeux",
+        description=description,
+        color=discord.Color.blurple()
+    )
+
+    # Cherche un message déjà envoyé par le bot
+    msg = None
+    async for m in channel.history(limit=50):
+        if m.author == self.bot.user and len(m.embeds) > 0:
+            msg = m
+            break
+
+    # Édite ou envoie
+    if msg:
+        await msg.edit(embed=embed)
+    else:
+        await channel.send(embed=embed)
 
     # --- Commandes ---
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
