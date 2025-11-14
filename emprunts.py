@@ -89,11 +89,13 @@ class Emprunts(commands.Cog):
         jeux = get_jeux()
 
         text_info = (
-                "## Emprunts de jeux \n\n\n"
+                "## Emprunts de jeux \n"
+                "\n"
                 "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
                 "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
                 "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
-                "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n\n"
+                "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n"
+                "\n"
         )
 
         embed_dispo = discord.Embed(
