@@ -47,12 +47,12 @@ def format_liste(jeux):
             start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             if j["emprunteur_id"]:
-                lines.append(f"> **{idx}.** ~~{j['nom']}~~ *(<@{j['emprunteur_id']}> du {start_date} au {end_date})*")
+                lines.append(f"**{idx}.** ~~{j['nom']}~~ (<@{j['emprunteur_id']}> du {start_date} au {end_date})")
             else:
-                lines.append(f"> **{idx}.** ~~{j['nom']}~~ *({j['emprunteur']} du {start_date} au {end_date})*")
+                lines.append(f"**{idx}.** ~~{j['nom']}~~ ({j['emprunteur']} du {start_date} au {end_date})")
         else:
-            lines.append(f"> **{idx}.** {j['nom']}")
-    return "\n".join(lines)
+            lines.append(f"**{idx}.** {j['nom']}")
+    return "\n".join(lines) if lines else "Aucun"
 
 def find_jeu(user_input):
     jeux = get_jeux()
@@ -82,33 +82,44 @@ class Emprunts(commands.Cog):
     # --------------------------
     async def update_message(self, channel):
         jeux = get_jeux()
-        description = (
-            "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
-            "📆 Vous pouvez en emprunter **1** par utilisateur·rice Discord, pendant **2 semaines**.\n\n"
-            "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
-            "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n\n"
-            "🎲 **Jeux empruntables :**\n\n"
-            + format_liste(jeux)
+        dispo = [j for j in jeux if not j["emprunte"]]
+        empruntes = [j for j in jeux if j["emprunte"]]
+
+        embed_info = discord.Embed(
+            title="📚 Emprunts de jeux",
+            description=(
+                "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
+                "📆 Vous pouvez en emprunter **1** par utilisateur·rice Discord, pendant **2 semaines**.\n\n"
+                "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
+                "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`)."
+            ),
+            color=discord.Color.blurple()
         )
 
-        embed = discord.Embed(
-            title="📚 Emprunts de jeux",
-            description=description,
-            color=discord.Color.blurple()
+        embed_dispo = discord.Embed(
+            title="✅ Jeux disponibles",
+            description=format_liste(dispo),
+            color=discord.Color.green()
+        )
+
+        embed_empruntes = discord.Embed(
+            title="❌ Jeux empruntés",
+            description=format_liste(empruntes),
+            color=discord.Color.red()
         )
 
         # Cherche un message déjà envoyé par le bot
         msg = None
         async for m in channel.history(limit=50):
-            if m.author == self.bot.user and len(m.embeds) > 0:
+            if m.author == self.bot.user:
                 msg = m
                 break
 
         # Édite ou envoie
         if msg:
-            await msg.edit(embed=embed)
+            await msg.edit(embeds=[embed_info, embed_dispo, embed_empruntes])
         else:
-            await channel.send(embed=embed)
+            await channel.send(embeds=[embed_info, embed_dispo, embed_empruntes])
 
     # --------------------------
     # COMMANDES
@@ -137,10 +148,7 @@ class Emprunts(commands.Cog):
                     ephemeral=True
                 )
             else:
-                await interaction.followup.send(
-                    "❌ Tu as déjà un jeu emprunté.",
-                    ephemeral=True
-                )
+                await interaction.followup.send("❌ Tu as déjà un jeu emprunté.", ephemeral=True)
             return
 
         j = find_jeu(jeu)
@@ -240,7 +248,6 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
-
 
 # --------------------------
 # SETUP
