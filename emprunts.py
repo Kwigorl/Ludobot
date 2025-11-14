@@ -40,16 +40,21 @@ def get_jeux():
     response = supabase.table("jeux").select("*").order("nom", desc=False).execute()
     return response.data
 
-def format_liste(jeux):
+def format_liste(jeux, filtre=None):
+    """
+    jeux : liste complète
+    filtre : None pour tous, True pour empruntés, False pour disponibles
+    """
     lines = []
     for idx, j in enumerate(jeux, start=1):
+        if filtre is not None and j["emprunte"] != filtre:
+            continue
+
         if j["emprunte"]:
             start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
-            if j["emprunteur_id"]:
-                lines.append(f"**{idx}.** {j['nom']} (<@{j['emprunteur_id']}> du {start_date} au {end_date})")
-            else:
-                lines.append(f"**{idx}.** {j['nom']} ({j['emprunteur']} du {start_date} au {end_date})")
+            emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
+            lines.append(f"**{idx}.** {j['nom']} ({emprunteur_tag} du {start_date} au {end_date})")
         else:
             lines.append(f"**{idx}.** {j['nom']}")
     return "\n".join(lines) if lines else "Aucun"
@@ -82,8 +87,6 @@ class Emprunts(commands.Cog):
     # --------------------------
     async def update_message(self, channel):
         jeux = get_jeux()
-        dispo = [j for j in jeux if not j["emprunte"]]
-        empruntes = [j for j in jeux if j["emprunte"]]
 
         embed_info = discord.Embed(
             title="📚 Emprunts de jeux",
@@ -98,13 +101,13 @@ class Emprunts(commands.Cog):
 
         embed_dispo = discord.Embed(
             title="✅ Jeux disponibles",
-            description=format_liste(dispo),
+            description=format_liste(jeux, filtre=False),
             color=discord.Color.green()
         )
 
         embed_empruntes = discord.Embed(
             title="❌ Jeux empruntés",
-            description=format_liste(empruntes),
+            description=format_liste(jeux, filtre=True),
             color=discord.Color.red()
         )
 
