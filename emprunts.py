@@ -226,7 +226,7 @@ class Emprunts(commands.Cog):
         await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
 
     @app_commands.command(name="retrait", description="Retire un jeu (Bureau)")
-    @app_commands.describe(jeu=numéro du jeu à retirer")
+    @app_commands.describe(jeu="Numéro du jeu à retirer")
     async def retire(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
