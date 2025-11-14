@@ -47,9 +47,9 @@ def format_liste(jeux):
             start_date = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             end_date = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
             if j["emprunteur_id"]:
-                lines.append(f"**{idx}.** ~~{j['nom']}~~ (<@{j['emprunteur_id']}> du {start_date} au {end_date})")
+                lines.append(f"**{idx}.** {j['nom']} (<@{j['emprunteur_id']}> du {start_date} au {end_date})")
             else:
-                lines.append(f"**{idx}.** ~~{j['nom']}~~ ({j['emprunteur']} du {start_date} au {end_date})")
+                lines.append(f"**{idx}.** {j['nom']} ({j['emprunteur']} du {start_date} au {end_date})")
         else:
             lines.append(f"**{idx}.** {j['nom']}")
     return "\n".join(lines) if lines else "Aucun"
