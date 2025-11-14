@@ -78,21 +78,21 @@ class Emprunts(commands.Cog):
         self.bot = bot
 
     async def update_message(self, channel):
-    jeux = get_jeux()
-    description = (
-        "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
-        "📆 Vous pouvez en emprunter **1** par utilisateur·rice Discord, pendant **2 semaines**.\n\n"
-        "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
-        "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n\n"
-        "🎲 **Jeux empruntables :**\n\n"
-        + format_liste(jeux)
-    )
+        jeux = get_jeux()
+        description = (
+            "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
+            "📆 Vous pouvez en emprunter **1** par utilisateur·rice Discord, pendant **2 semaines**.\n\n"
+            "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
+            "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n\n"
+            "🎲 **Jeux empruntables :**\n\n"
+            + format_liste(jeux)
+        )
 
-    embed = discord.Embed(
-        title="📚 Emprunts de jeux",
-        description=description,
-        color=discord.Color.blurple()
-    )
+        embed = discord.Embed(
+            title="📚 Emprunts de jeux",
+            description=description,
+            color=discord.Color.blurple()
+        )
 
     # Cherche un message déjà envoyé par le bot
     msg = None
