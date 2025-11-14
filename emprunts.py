@@ -117,9 +117,9 @@ class Emprunts(commands.Cog):
 
         # Édite ou envoie
         if msg:
-            await msg.edit(embeds=[embed_info, embed_dispo, embed_empruntes])
+            await msg.edit(embeds=[content=text_info, embed_dispo, embed_empruntes])
         else:
-            await channel.send(embeds=[embed_info, embed_dispo, embed_empruntes])
+            await channel.send(embeds=[content=text_info, embed_dispo, embed_empruntes])
 
     # --------------------------
     # COMMANDES
