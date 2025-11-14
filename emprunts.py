@@ -93,8 +93,10 @@ class Emprunts(commands.Cog):
                 "\u200B \n"
                 "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
                 "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
-                "📤 Pour emprunter : `/emprunt [numéro]` (ex : `/emprunt 3`).\n"
-                "📥 Pour retourner : `/retour [numéro]` (ex : `/retour 3`).\n"
+                "📤 Pour emprunter, tapez ici la commande :\n"
+                "`/emprunt [n° du jeu]` (ex : `/emprunt 3`).\n"
+                "📥 Pour retourner, tapez ici la commande :\n"
+                "`/retour [n° du jeu]` (ex : `/retour 3`).\n"
                 "\u200B \n"
         )
 
@@ -127,7 +129,7 @@ class Emprunts(commands.Cog):
     # COMMANDES
     # --------------------------
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
-    @app_commands.describe(jeu="Nom ou numéro du jeu")
+    @app_commands.describe(jeu="Numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
@@ -177,7 +179,7 @@ class Emprunts(commands.Cog):
         )
 
     @app_commands.command(name="retour", description="Rend un jeu que tu as emprunté")
-    @app_commands.describe(jeu="Nom ou numéro du jeu")
+    @app_commands.describe(jeu="Numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
@@ -224,7 +226,7 @@ class Emprunts(commands.Cog):
         await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
 
     @app_commands.command(name="retrait", description="Retire un jeu (Bureau)")
-    @app_commands.describe(jeu="Nom ou numéro du jeu à retirer")
+    @app_commands.describe(jeu=numéro du jeu à retirer")
     async def retire(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
