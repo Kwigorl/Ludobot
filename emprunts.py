@@ -77,6 +77,9 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # --------------------------
+    # UPDATE MESSAGE
+    # --------------------------
     async def update_message(self, channel):
         jeux = get_jeux()
         description = (
@@ -94,20 +97,22 @@ class Emprunts(commands.Cog):
             color=discord.Color.blurple()
         )
 
-    # Cherche un message déjà envoyé par le bot
-    msg = None
-    async for m in channel.history(limit=50):
-        if m.author == self.bot.user and len(m.embeds) > 0:
-            msg = m
-            break
+        # Cherche un message déjà envoyé par le bot
+        msg = None
+        async for m in channel.history(limit=50):
+            if m.author == self.bot.user and len(m.embeds) > 0:
+                msg = m
+                break
 
-    # Édite ou envoie
-    if msg:
-        await msg.edit(embed=embed)
-    else:
-        await channel.send(embed=embed)
+        # Édite ou envoie
+        if msg:
+            await msg.edit(embed=embed)
+        else:
+            await channel.send(embed=embed)
 
-    # --- Commandes ---
+    # --------------------------
+    # COMMANDES
+    # --------------------------
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
     @app_commands.describe(jeu="Nom ou numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
@@ -121,10 +126,8 @@ class Emprunts(commands.Cog):
         display_name = interaction.user.display_name
 
         if user_a_emprunt(user_id):
-            jeu_emprunte = None
             response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
-            if response.data:
-                jeu_emprunte = response.data[0]
+            jeu_emprunte = response.data[0] if response.data else None
 
             if jeu_emprunte:
                 jeux = get_jeux()
@@ -237,6 +240,7 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
+
 
 # --------------------------
 # SETUP
