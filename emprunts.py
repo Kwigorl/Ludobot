@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import os
 from datetime import datetime, timedelta
@@ -41,10 +41,6 @@ def get_jeux():
     return response.data
 
 def format_liste(jeux, filtre=None):
-    """
-    jeux : liste complète
-    filtre : None pour tous, True pour empruntés, False pour disponibles
-    """
     lines = []
     for idx, j in enumerate(jeux, start=1):
         if filtre is not None and j["emprunte"] != filtre:
@@ -82,6 +78,9 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        # --- Tâche interne pour garder Supabase active ---
+        self.keep_supabase_awake.start()
+
     # --------------------------
     # UPDATE MESSAGE
     # --------------------------
@@ -112,14 +111,12 @@ class Emprunts(commands.Cog):
             color=discord.Color.red()
         )
 
-        # Cherche un message déjà envoyé par le bot
         msg = None
         async for m in channel.history(limit=50):
             if m.author == self.bot.user:
                 msg = m
                 break
 
-        # Édite ou envoie
         if msg:
             await msg.edit(content=text_info, embeds=[embed_dispo, embed_empruntes])
         else:
@@ -252,6 +249,17 @@ class Emprunts(commands.Cog):
         channel = self.bot.get_channel(CANAL_ID)
         await self.update_message(channel)
         await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
+
+    # --------------------------
+    # TÂCHE INTERNE POUR PING SUPABASE
+    # --------------------------
+    @tasks.loop(hours=4)
+    async def keep_supabase_awake(self):
+        try:
+            supabase.table("jeux").select("id").limit(1).execute()
+            print(f"✅ Ping Supabase effectué à {datetime.now()}")
+        except Exception as e:
+            print(f"❌ Erreur ping Supabase : {e}")
 
 # --------------------------
 # SETUP
