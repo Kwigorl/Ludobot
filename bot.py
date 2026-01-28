@@ -45,7 +45,7 @@ async def on_ready():
         print("Commandes slash synchronisées")
     except Exception as e:
         print(f"Erreur de synchronisation : {e}")
-
+    
     # Poster le message initial de la liste des jeux
     channel = bot.get_channel(CANAL_ID)
     if channel:
@@ -53,18 +53,19 @@ async def on_ready():
         if cog:
             await cog.update_message(channel)
             print("Message initial de liste des jeux posté")
-
+    
     # Démarrer la suppression automatique des messages
     delete_non_command_messages.start()
 
 # ----------------------
 # SUPPRESSION DES MESSAGES NON-COMMANDES
 # ----------------------
-@tasks.loop(seconds=1)
+@tasks.loop(minutes=1)  # ✅ Changé de 1 seconde à 1 minute
 async def delete_non_command_messages():
     channel = bot.get_channel(CANAL_ID)
     if not channel:
         return
+    
     try:
         async for message in channel.history(limit=50):
             if message.author != bot.user and not message.content.startswith("/"):
