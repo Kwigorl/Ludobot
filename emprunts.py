@@ -24,7 +24,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # Jours: 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 15, "end": 24},  # Mercredi 20h-minuit
+    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-minuit
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-minuit
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
@@ -114,18 +114,30 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
     try:
         # Calculer la date d'il y a 30 jours
         il_y_a_30_jours = datetime.now(TIMEZONE) - timedelta(days=30)
-        date_limite = il_y_a_30_jours.strftime("%d/%m/%Y %H:%M")
         
-        # Récupérer tous les emprunts de cet utilisateur pour ce jeu dans les 30 derniers jours
+        # Récupérer tous les emprunts de cet utilisateur pour ce jeu
         response = supabase.table("historique_emprunts") \
             .select("*") \
             .eq("user_id", user_id) \
             .eq("jeu_id", jeu_id) \
-            .gte("date_emprunt", date_limite) \
             .execute()
         
-        # Si on trouve au moins un emprunt dans les 30 derniers jours, on bloque
-        return len(response.data) > 0
+        # Vérifier manuellement si un emprunt a eu lieu dans les 30 derniers jours
+        for emprunt in response.data:
+            try:
+                # Parser la date au format "JJ/MM/AAAA HH:MM"
+                date_emprunt = datetime.strptime(emprunt["date_emprunt"], "%d/%m/%Y %H:%M")
+                # Rendre la date "aware" du fuseau horaire
+                date_emprunt = TIMEZONE.localize(date_emprunt)
+                
+                # Si l'emprunt est dans les 30 derniers jours, on bloque
+                if date_emprunt >= il_y_a_30_jours:
+                    return True
+            except Exception as e:
+                print(f"⚠️ Erreur parsing date : {e}")
+                continue
+        
+        return False
     except Exception as e:
         print(f"⚠️ Erreur vérification dernier emprunt : {e}")
         return False  # En cas d'erreur, on autorise l'emprunt
@@ -188,13 +200,14 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
     @app_commands.describe(jeu="Numéro du jeu")
     async def emprunte(self, interaction: discord.Interaction, jeu: str):
+        # Vérifier la disponibilité AVANT le defer pour répondre rapidement
+        if not est_disponible():
+            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
+            return
+        
         await interaction.response.defer(ephemeral=True)
 
         try:
-            if not est_disponible():
-                await interaction.followup.send("⏰ Service fermé pour le moment.", ephemeral=True)
-                return
-
             user_id = interaction.user.id
             display_name = interaction.user.display_name
 
@@ -240,16 +253,21 @@ class Emprunts(commands.Cog):
             
             # Enregistrer dans l'historique
             try:
-                supabase.table("historique_emprunts").insert({
+                historique_data = {
                     "user_id": user_id,
                     "user_pseudo": display_name,
                     "jeu_id": j["id"],
                     "jeu_nom": j["nom"],
                     "date_emprunt": now_paris.strftime("%d/%m/%Y %H:%M"),
                     "date_retour": None
-                }).execute()
+                }
+                print(f"📝 Tentative d'enregistrement historique : {historique_data}")
+                result = supabase.table("historique_emprunts").insert(historique_data).execute()
+                print(f"✅ Historique enregistré : {result.data}")
             except Exception as e:
-                print(f"⚠️ Erreur enregistrement historique : {e}")
+                print(f"❌ Erreur enregistrement historique : {e}")
+                import traceback
+                traceback.print_exc()
 
             channel = self.bot.get_channel(CANAL_ID)
             await self.update_message(channel)
@@ -268,13 +286,14 @@ class Emprunts(commands.Cog):
     @app_commands.command(name="retour", description="Rend un jeu que tu as emprunté")
     @app_commands.describe(jeu="Numéro du jeu")
     async def rend(self, interaction: discord.Interaction, jeu: str):
+        # Vérifier la disponibilité AVANT le defer pour répondre rapidement
+        if not est_disponible():
+            await interaction.response.send_message("⏰ Service fermé pour le moment.", ephemeral=True)
+            return
+        
         await interaction.response.defer(ephemeral=True)
 
         try:
-            if not est_disponible():
-                await interaction.followup.send("⏰ Service fermé pour le moment.", ephemeral=True)
-                return
-
             j = find_jeu(jeu)
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
