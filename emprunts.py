@@ -24,7 +24,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # Jours: 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 10, "end": 24},  # Mercredi 20h-minuit
+    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-minuit
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-minuit
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
@@ -110,32 +110,22 @@ def user_a_emprunt(user_id):
     return len(response.data) > 0
 
 def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
-    """Vérifie si l'utilisateur a emprunté ce jeu lors de son dernier emprunt"""
+    """Vérifie si l'utilisateur a emprunté ce jeu dans les 30 derniers jours"""
     try:
-        # Récupérer l'historique des emprunts de l'utilisateur pour ce jeu
+        # Calculer la date d'il y a 30 jours
+        il_y_a_30_jours = datetime.now(TIMEZONE) - timedelta(days=30)
+        date_limite = il_y_a_30_jours.strftime("%d/%m/%Y %H:%M")
+        
+        # Récupérer tous les emprunts de cet utilisateur pour ce jeu dans les 30 derniers jours
         response = supabase.table("historique_emprunts") \
             .select("*") \
             .eq("user_id", user_id) \
             .eq("jeu_id", jeu_id) \
-            .order("date_emprunt", desc=True) \
-            .limit(1) \
+            .gte("date_emprunt", date_limite) \
             .execute()
         
-        if not response.data:
-            return False
-        
-        # Vérifier s'il s'agit du dernier emprunt de l'utilisateur
-        dernier_emprunt_user = supabase.table("historique_emprunts") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .order("date_emprunt", desc=True) \
-            .limit(1) \
-            .execute()
-        
-        if dernier_emprunt_user.data and response.data:
-            return dernier_emprunt_user.data[0]["id"] == response.data[0]["id"]
-        
-        return False
+        # Si on trouve au moins un emprunt dans les 30 derniers jours, on bloque
+        return len(response.data) > 0
     except Exception as e:
         print(f"⚠️ Erreur vérification dernier emprunt : {e}")
         return False  # En cas d'erreur, on autorise l'emprunt
@@ -231,10 +221,10 @@ class Emprunts(commands.Cog):
                 await interaction.followup.send(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
                 return
             
-            # Vérifier si l'utilisateur a emprunté ce jeu lors de son dernier emprunt
+            # Vérifier si l'utilisateur a emprunté ce jeu dans le dernier mois
             if user_a_deja_emprunte_ce_jeu(user_id, j["id"]):
                 await interaction.followup.send(
-                    f"❌ Tu as déjà emprunté **{j['nom']}** lors de ton dernier emprunt. Choisis un autre jeu !",
+                    f"❌ Tu as déjà emprunté **{j['nom']}** ce dernier mois. Tu pourras le réemprunter dans 30 jours après ton dernier emprunt.",
                     ephemeral=True
                 )
                 return
@@ -282,7 +272,7 @@ class Emprunts(commands.Cog):
 
         try:
             if not est_disponible():
-                await interaction.followup.send("⏰ Emprunts et retours uniquement possibles sur les horaires des séances ludiques.", ephemeral=True)
+                await interaction.followup.send("⏰ Service fermé pour le moment.", ephemeral=True)
                 return
 
             j = find_jeu(jeu)
