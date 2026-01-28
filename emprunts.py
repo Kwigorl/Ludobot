@@ -24,7 +24,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # Jours: 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-minuit
+    {"jour": 2, "start": 15, "end": 24},  # Mercredi 20h-minuit
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-minuit
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
