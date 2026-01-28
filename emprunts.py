@@ -202,7 +202,7 @@ class Emprunts(commands.Cog):
 
         try:
             if not est_disponible():
-                await interaction.followup.send("⏰ Service disponible uniquement sur les horaires des séances ludiques.", ephemeral=True)
+                await interaction.followup.send("⏰ Service fermé pour le moment.", ephemeral=True)
                 return
 
             user_id = interaction.user.id
@@ -240,6 +240,7 @@ class Emprunts(commands.Cog):
                 return
 
             now = datetime.now().isoformat()
+            now_paris = datetime.now(TIMEZONE)
             supabase.table("jeux").update({
                 "emprunte": True,
                 "emprunteur": display_name,
@@ -251,9 +252,11 @@ class Emprunts(commands.Cog):
             try:
                 supabase.table("historique_emprunts").insert({
                     "user_id": user_id,
+                    "user_pseudo": display_name,
                     "jeu_id": j["id"],
                     "jeu_nom": j["nom"],
-                    "date_emprunt": now
+                    "date_emprunt": now_paris.strftime("%d/%m/%Y %H:%M"),
+                    "date_retour": None
                 }).execute()
             except Exception as e:
                 print(f"⚠️ Erreur enregistrement historique : {e}")
@@ -278,6 +281,10 @@ class Emprunts(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         try:
+            if not est_disponible():
+                await interaction.followup.send("⏰ Emprunts et retours uniquement possibles sur les horaires des séances ludiques.", ephemeral=True)
+                return
+
             j = find_jeu(jeu)
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
@@ -300,6 +307,26 @@ class Emprunts(commands.Cog):
                 "emprunteur_id": None,
                 "date_emprunt": None
             }).eq("id", j["id"]).execute()
+            
+            # Mettre à jour l'historique avec la date de retour
+            try:
+                now_paris = datetime.now(TIMEZONE)
+                # Trouver l'emprunt en cours pour cet utilisateur et ce jeu
+                response = supabase.table("historique_emprunts") \
+                    .select("*") \
+                    .eq("user_id", interaction.user.id) \
+                    .eq("jeu_id", j["id"]) \
+                    .is_("date_retour", "null") \
+                    .order("id", desc=True) \
+                    .limit(1) \
+                    .execute()
+                
+                if response.data:
+                    supabase.table("historique_emprunts").update({
+                        "date_retour": now_paris.strftime("%d/%m/%Y %H:%M")
+                    }).eq("id", response.data[0]["id"]).execute()
+            except Exception as e:
+                print(f"⚠️ Erreur mise à jour historique retour : {e}")
 
             channel = self.bot.get_channel(CANAL_ID)
             await self.update_message(channel)
