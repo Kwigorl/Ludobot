@@ -444,8 +444,6 @@ class Emprunts(commands.Cog):
                 "❌ Une erreur s'est produite lors de la mise à jour. Réessaye plus tard.",
                 ephemeral=True
             )
-                ephemeral=True
-            )
 
 # --------------------------
 # SETUP
