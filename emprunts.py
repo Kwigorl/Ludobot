@@ -24,10 +24,11 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # CRÉNEAUX D'EMPRUNT
 # --------------------------
+# 0=Lundi ... 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 15, "end": 24},  # Mercredi
-    {"jour": 4, "start": 20, "end": 24},  # Vendredi
-    {"jour": 6, "start": 14, "end": 18}   # Dimanche
+    {"jour": 2, "start": 15, "end": 24},  # Mercredi 15h-24h
+    {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
+    {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
 
 TIMEZONE = pytz.timezone("Europe/Paris")
@@ -50,15 +51,13 @@ def format_liste(jeux, filtre=None):
     for idx, j in enumerate(jeux, start=1):
         if filtre is not None and j["emprunte"] != filtre:
             continue
-
         if j["emprunte"]:
-            start = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m") if j["date_emprunt"] else "??/??"
-            end = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m") if j["date_emprunt"] else "??/??"
+            start = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m")
+            end = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m")
             emprunteur = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
             lines.append(f"**{idx}.** {j['nom']} ({emprunteur} du {start} au {end})")
         else:
             lines.append(f"**{idx}.** {j['nom']}")
-
     return "\n".join(lines) if lines else "Aucun"
 
 def normaliser_texte(txt):
@@ -70,12 +69,12 @@ def normaliser_texte(txt):
 
 def find_jeu(user_input):
     jeux = get_jeux()
-
+    # Recherche par numéro
     if user_input.isdigit():
         idx = int(user_input) - 1
         if 0 <= idx < len(jeux):
             return jeux[idx]
-
+    # Recherche par nom insensible aux accents
     search = normaliser_texte(user_input)
     for j in jeux:
         if search in normaliser_texte(j["nom"]):
@@ -99,7 +98,6 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
             .eq("user_id", user_id) \
             .eq("jeu_id", jeu_id) \
             .execute()
-
         for e in response.data:
             d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%d/%m/%Y %H:%M"))
             if d >= limite:
@@ -118,14 +116,12 @@ class Emprunts(commands.Cog):
     async def update_message(self, channel):
         try:
             jeux = get_jeux()
-
             text = (
                 "## 🎲 Emprunts de jeux\n\n"
                 "😊 Un jeu par personne, pour **2 semaines**.\n\n"
                 "`/emprunt [numéro]`\n"
                 "`/retour [numéro]`\n\n"
             )
-
             embeds = [
                 discord.Embed(
                     title="✅ Jeux disponibles",
@@ -138,17 +134,13 @@ class Emprunts(commands.Cog):
                     color=discord.Color.red()
                 )
             ]
-
             async for m in channel.history(limit=20):
                 if m.author == self.bot.user:
                     await m.edit(content=text, embeds=embeds)
                     return
-
             await channel.send(content=text, embeds=embeds)
-
         except Exception as e:
             print("❌ update_message:", e)
-            traceback.print_exc()
 
     # --------------------------
     # /emprunt
@@ -160,37 +152,29 @@ class Emprunts(commands.Cog):
             if not est_disponible():
                 await interaction.followup.send("⏰ Service fermé.", ephemeral=True)
                 return
-
             user_id = interaction.user.id
             display = interaction.user.display_name
-
             if user_a_emprunt(user_id):
                 await interaction.followup.send("❌ Tu as déjà un jeu emprunté.", ephemeral=True)
                 return
-
             j = find_jeu(jeu)
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
-
             if j["emprunte"]:
                 await interaction.followup.send("❌ Jeu déjà emprunté.", ephemeral=True)
                 return
-
             if user_a_deja_emprunte_ce_jeu(user_id, j["id"]):
                 await interaction.followup.send("❌ Tu as déjà emprunté ce jeu récemment.", ephemeral=True)
                 return
-
             now_iso = datetime.now().isoformat()
             now_paris = datetime.now(TIMEZONE)
-
             supabase.table("jeux").update({
                 "emprunte": True,
                 "emprunteur": display,
                 "emprunteur_id": user_id,
                 "date_emprunt": now_iso
             }).eq("id", j["id"]).execute()
-
             supabase.table("historique_emprunts").insert({
                 "user_id": user_id,
                 "user_pseudo": display,
@@ -199,14 +183,11 @@ class Emprunts(commands.Cog):
                 "date_emprunt": now_paris.strftime("%d/%m/%Y %H:%M"),
                 "date_retour": None
             }).execute()
-
             await self.update_message(self.bot.get_channel(CANAL_ID))
-
             await interaction.followup.send(
                 f"✅ **{j['nom']}** emprunté (retour max {(datetime.fromisoformat(now_iso)+timedelta(days=14)).strftime('%d/%m')}).",
                 ephemeral=True
             )
-
         except Exception:
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
@@ -221,30 +202,24 @@ class Emprunts(commands.Cog):
             if not est_disponible():
                 await interaction.followup.send("⏰ Service fermé.", ephemeral=True)
                 return
-
             j = find_jeu(jeu)
             if not j or not j["emprunte"]:
                 await interaction.followup.send("❌ Jeu invalide.", ephemeral=True)
                 return
-
             if j["emprunteur_id"] != interaction.user.id:
                 await interaction.followup.send("❌ Ce n’est pas ton emprunt.", ephemeral=True)
                 return
-
             supabase.table("jeux").update({
                 "emprunte": False,
                 "emprunteur": None,
                 "emprunteur_id": None,
                 "date_emprunt": None
             }).eq("id", j["id"]).execute()
-
             supabase.table("historique_emprunts").update({
                 "date_retour": datetime.now(TIMEZONE).strftime("%d/%m/%Y %H:%M")
             }).eq("jeu_id", j["id"]).eq("user_id", interaction.user.id).is_("date_retour", "null").execute()
-
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ **{j['nom']}** retourné.", ephemeral=True)
-
         except Exception:
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
@@ -259,11 +234,10 @@ class Emprunts(commands.Cog):
             if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
                 await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
                 return
-
+            # Ajouter le jeu
             supabase.table("jeux").insert({"nom": jeu}).execute()
             await self.update_message(self.bot.get_channel(CANAL_ID))
-            await interaction.followup.send(f"✅ **{jeu}** ajouté.", ephemeral=True)
-
+            await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
         except Exception:
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
@@ -278,33 +252,16 @@ class Emprunts(commands.Cog):
             if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
                 await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
                 return
-
             j = find_jeu(jeu)
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
-
             supabase.table("jeux").delete().eq("id", j["id"]).execute()
             await self.update_message(self.bot.get_channel(CANAL_ID))
-            await interaction.followup.send(f"✅ **{j['nom']}** retiré.", ephemeral=True)
-
+            await interaction.followup.send(f"✅ {j['nom']} retiré.", ephemeral=True)
         except Exception:
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
-
-    # --------------------------
-    # /liste
-    # --------------------------
-    @app_commands.command(name="liste", description="Met à jour la liste des jeux")
-    async def liste(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        try:
-            await self.update_message(self.bot.get_channel(CANAL_ID))
-            await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
-        except Exception:
-            traceback.print_exc()
-            await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
-
 
 # --------------------------
 # SETUP
