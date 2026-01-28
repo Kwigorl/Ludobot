@@ -24,7 +24,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # Jours: 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 15, "end": 24},  # Mercredi 20h-minuit
+    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-minuit
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-minuit
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
@@ -207,11 +207,12 @@ class Emprunts(commands.Cog):
         
         await interaction.response.defer(ephemeral=True)
 
-        try:
-            user_id = interaction.user.id
-            display_name = interaction.user.display_name
+        user_id = interaction.user.id
+        display_name = interaction.user.display_name
 
-            if user_a_emprunt(user_id):
+        # Vérifier si l'utilisateur a déjà un jeu emprunté
+        if user_a_emprunt(user_id):
+            try:
                 response = supabase.table("jeux").select("*").eq("emprunteur_id", user_id).execute()
                 jeu_emprunte = response.data[0] if response.data else None
 
@@ -224,24 +225,34 @@ class Emprunts(commands.Cog):
                     )
                 else:
                     await interaction.followup.send("❌ Tu as déjà un jeu emprunté.", ephemeral=True)
-                return
-
-            j = find_jeu(jeu)
-            if not j:
-                await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
-                return
-            if j["emprunte"]:
-                await interaction.followup.send(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
-                return
-            
-            # Vérifier si l'utilisateur a emprunté ce jeu dans le dernier mois
-            if user_a_deja_emprunte_ce_jeu(user_id, j["id"]):
+            except Exception as e:
+                print(f"❌ Erreur vérification emprunt existant : {e}")
                 await interaction.followup.send(
-                    f"❌ Tu as déjà emprunté **{j['nom']}** ce dernier mois. Tu pourras le réemprunter dans 30 jours après ton dernier emprunt.",
+                    "❌ Une erreur s'est produite lors de la vérification. Réessaye plus tard.",
                     ephemeral=True
                 )
-                return
+            return
 
+        # Trouver le jeu
+        j = find_jeu(jeu)
+        if not j:
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
+            return
+        
+        if j["emprunte"]:
+            await interaction.followup.send(f"❌ **{j['nom']}** est déjà emprunté.", ephemeral=True)
+            return
+        
+        # Vérifier si l'utilisateur a emprunté ce jeu dans le dernier mois
+        if user_a_deja_emprunte_ce_jeu(user_id, j["id"]):
+            await interaction.followup.send(
+                f"❌ Tu as déjà emprunté **{j['nom']}** ce dernier mois. Tu pourras le réemprunter dans 30 jours après ton dernier emprunt.",
+                ephemeral=True
+            )
+            return
+
+        # Effectuer l'emprunt
+        try:
             now = datetime.now().isoformat()
             now_paris = datetime.now(TIMEZONE)
             supabase.table("jeux").update({
@@ -277,9 +288,11 @@ class Emprunts(commands.Cog):
             )
         
         except Exception as e:
-            print(f"❌ Erreur commande /emprunt : {e}")
+            print(f"❌ Erreur lors de l'emprunt : {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(
-                "❌ Une erreur s'est produite. Réessaye plus tard ou contacte un membre du bureau.",
+                "❌ Une erreur s'est produite lors de l'emprunt. Réessaye plus tard ou contacte un membre du bureau.",
                 ephemeral=True
             )
 
@@ -293,23 +306,26 @@ class Emprunts(commands.Cog):
         
         await interaction.response.defer(ephemeral=True)
 
+        # Trouver le jeu
+        j = find_jeu(jeu)
+        if not j:
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
+            return
+        
+        if not j["emprunte"]:
+            await interaction.followup.send(f"❌ {j['nom']} n'est pas emprunté.", ephemeral=True)
+            return
+
+        if j["emprunteur_id"] != interaction.user.id:
+            emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
+            await interaction.followup.send(
+                f"❌ **{j['nom']}** est emprunté par {emprunteur_tag}, tu ne peux pas le retourner.",
+                ephemeral=True
+            )
+            return
+
+        # Effectuer le retour
         try:
-            j = find_jeu(jeu)
-            if not j:
-                await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
-                return
-            if not j["emprunte"]:
-                await interaction.followup.send(f"❌ {j['nom']} n'est pas emprunté.", ephemeral=True)
-                return
-
-            if j["emprunteur_id"] != interaction.user.id:
-                emprunteur_tag = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
-                await interaction.followup.send(
-                    f"❌ **{j['nom']}** est emprunté par {emprunteur_tag}, tu ne peux pas le retourner.",
-                    ephemeral=True
-                )
-                return
-
             supabase.table("jeux").update({
                 "emprunte": False,
                 "emprunteur": None,
@@ -334,6 +350,7 @@ class Emprunts(commands.Cog):
                     supabase.table("historique_emprunts").update({
                         "date_retour": now_paris.strftime("%d/%m/%Y %H:%M")
                     }).eq("id", response.data[0]["id"]).execute()
+                    print(f"✅ Date de retour mise à jour dans l'historique")
             except Exception as e:
                 print(f"⚠️ Erreur mise à jour historique retour : {e}")
 
@@ -342,9 +359,11 @@ class Emprunts(commands.Cog):
             await interaction.followup.send(f"✅ Tu as retourné **{j['nom']}**.", ephemeral=True)
         
         except Exception as e:
-            print(f"❌ Erreur commande /retour : {e}")
+            print(f"❌ Erreur lors du retour : {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(
-                "❌ Une erreur s'est produite. Réessaye plus tard ou contacte un membre du bureau.",
+                "❌ Une erreur s'est produite lors du retour. Réessaye plus tard ou contacte un membre du bureau.",
                 ephemeral=True
             )
 
@@ -353,11 +372,13 @@ class Emprunts(commands.Cog):
     async def ajout(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
-        try:
-            if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-                await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
-                return
+        # Vérifier les permissions
+        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
+            await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
+            return
 
+        # Ajouter le jeu
+        try:
             supabase.table("jeux").insert({"nom": jeu}).execute()
 
             channel = self.bot.get_channel(CANAL_ID)
@@ -365,9 +386,11 @@ class Emprunts(commands.Cog):
             await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
         
         except Exception as e:
-            print(f"❌ Erreur commande /ajout : {e}")
+            print(f"❌ Erreur lors de l'ajout : {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(
-                "❌ Une erreur s'est produite. Réessaye plus tard.",
+                "❌ Une erreur s'est produite lors de l'ajout. Réessaye plus tard.",
                 ephemeral=True
             )
 
@@ -376,16 +399,19 @@ class Emprunts(commands.Cog):
     async def retire(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
 
+        # Vérifier les permissions
+        if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
+            await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
+            return
+
+        # Trouver le jeu
+        j = find_jeu(jeu)
+        if not j:
+            await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
+            return
+
+        # Retirer le jeu
         try:
-            if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
-                await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
-                return
-
-            j = find_jeu(jeu)
-            if not j:
-                await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
-                return
-
             supabase.table("jeux").delete().eq("id", j["id"]).execute()
 
             channel = self.bot.get_channel(CANAL_ID)
@@ -393,9 +419,11 @@ class Emprunts(commands.Cog):
             await interaction.followup.send(f"✅ {j['nom']} retiré.", ephemeral=True)
         
         except Exception as e:
-            print(f"❌ Erreur commande /retrait : {e}")
+            print(f"❌ Erreur lors du retrait : {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(
-                "❌ Une erreur s'est produite. Réessaye plus tard.",
+                "❌ Une erreur s'est produite lors du retrait. Réessaye plus tard.",
                 ephemeral=True
             )
 
@@ -409,9 +437,13 @@ class Emprunts(commands.Cog):
             await interaction.followup.send("✅ Liste mise à jour.", ephemeral=True)
         
         except Exception as e:
-            print(f"❌ Erreur commande /liste : {e}")
+            print(f"❌ Erreur lors de la mise à jour de la liste : {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(
-                "❌ Une erreur s'est produite. Réessaye plus tard.",
+                "❌ Une erreur s'est produite lors de la mise à jour. Réessaye plus tard.",
+                ephemeral=True
+            )
                 ephemeral=True
             )
 
