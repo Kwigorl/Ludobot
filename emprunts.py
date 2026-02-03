@@ -117,10 +117,16 @@ class Emprunts(commands.Cog):
         try:
             jeux = get_jeux()
             text = (
-                "## 🎲 Emprunts de jeux\n\n"
-                "😊 Un jeu par personne, pour **2 semaines**.\n\n"
-                "`/emprunt [numéro]`\n"
-                "`/retour [numéro]`\n\n"
+                  "## Emprunts de jeux \n"
+                "\u200B \n"
+                "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
+                "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
+                "Pour assurer la rotation des jeux, vous ne pouvez pas emprunter deux fois de suite un même jeu à moins de 30 jours d'intervalle.\n\n"
+                "📤 Pour emprunter, tapez ici la commande :\n"
+                "`/emprunt [n° du jeu]` (ex : `/emprunt 3`).\n"
+                "📥 Pour retourner, tapez ici la commande :\n"
+                "`/retour [n° du jeu]` (ex : `/retour 3`).\n"
+                "\u200B \n"
             )
             embeds = [
                 discord.Embed(
