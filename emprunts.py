@@ -156,7 +156,7 @@ class Emprunts(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             if not est_disponible():
-                await interaction.followup.send("⏰ Service fermé.", ephemeral=True)
+                await interaction.followup.send("⏰ Emprunts et retours impossibles en dehors des horaires des séances ludiques.", ephemeral=True)
                 return
             user_id = interaction.user.id
             display = interaction.user.display_name
@@ -206,7 +206,7 @@ class Emprunts(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             if not est_disponible():
-                await interaction.followup.send("⏰ Service fermé.", ephemeral=True)
+                await interaction.followup.send("⏰ Emprunts et retours impossibles en dehors des horaires des séances ludiques.", ephemeral=True)
                 return
             j = find_jeu(jeu)
             if not j or not j["emprunte"]:
