@@ -26,7 +26,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --------------------------
 # 0=Lundi ... 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 15, "end": 24},  # Mercredi 15h-24h
+    {"jour": 2, "start": 20, "end": 24},  # Mercredi 15h-24h
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
@@ -120,11 +120,11 @@ class Emprunts(commands.Cog):
                   "## Emprunts de jeux \n"
                 "\u200B \n"
                 "😊 Vous souhaitez repartir d'une séance avec un jeu de l'asso ?\n\n"
-                "📆 Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
-                "Pour assurer la rotation des jeux, vous ne pouvez pas emprunter deux fois de suite un même jeu à moins de 30 jours d'intervalle.\n\n"
-                "📤 Pour emprunter, tapez ici la commande :\n"
+                "⏳ Vous pouvez en emprunter 1 par utilisateur·rice Discord, pendant 2 semaines.\n\n"
+                "📆 Pour assurer la rotation des jeux, vous ne pouvez pas emprunter deux fois de suite un même jeu à moins de 30 jours d'intervalle.\n\n"
+                "📤 À l'emprunt, tapez ici la commande :\n"
                 "`/emprunt [n° du jeu]` (ex : `/emprunt 3`).\n"
-                "📥 Pour retourner, tapez ici la commande :\n"
+                "📥 Au retour, tapez ici la commande :\n"
                 "`/retour [n° du jeu]` (ex : `/retour 3`).\n"
                 "\u200B \n"
             )
