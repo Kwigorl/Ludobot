@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import os
 from datetime import datetime, timedelta
@@ -112,6 +112,7 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
 class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.keepalive_supabase.start()
 
     async def update_message(self, channel):
         try:
@@ -147,6 +148,29 @@ class Emprunts(commands.Cog):
             await channel.send(content=text, embeds=embeds)
         except Exception as e:
             print("❌ update_message:", e)
+
+    # --------------------------
+    # KEEPALIVE SUPABASE
+    # --------------------------
+    @tasks.loop(hours=1)
+    async def keepalive_supabase(self):
+        now = datetime.now(TIMEZONE)
+        # Nuit lundi→mardi (lundi=0) à 3h00
+        # Nuit jeudi→vendredi (jeudi=3) à 3h00
+        if now.weekday() in (0, 3) and now.hour == 3:
+            try:
+                # Insertion d'un jeu fictif
+                res = supabase.table("jeux").insert({"nom": "__keepalive__"}).execute()
+                jeu_id = res.data[0]["id"]
+                # Suppression immédiate
+                supabase.table("jeux").delete().eq("id", jeu_id).execute()
+                print(f"✅ Keepalive Supabase effectué ({now.strftime('%d/%m %H:%M')})")
+            except Exception as e:
+                print(f"❌ Keepalive échoué : {e}")
+
+    @keepalive_supabase.before_loop
+    async def before_keepalive(self):
+        await self.bot.wait_until_ready()
 
     # --------------------------
     # /emprunt
@@ -213,7 +237,7 @@ class Emprunts(commands.Cog):
                 await interaction.followup.send("❌ Jeu invalide.", ephemeral=True)
                 return
             if j["emprunteur_id"] != interaction.user.id:
-                await interaction.followup.send("❌ Ce n’est pas ton emprunt.", ephemeral=True)
+                await interaction.followup.send("❌ Ce n'est pas ton emprunt.", ephemeral=True)
                 return
             supabase.table("jeux").update({
                 "emprunte": False,
