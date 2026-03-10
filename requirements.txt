@@ -3,3 +3,4 @@ flask
 supabase>=2.4.0
 python-dotenv
 pytz
+aiohttp
