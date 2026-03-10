@@ -122,9 +122,12 @@ class Emprunts(commands.Cog):
                  "## Emprunts de jeux\n"
                 "\u200B\n"
                 "🙋 Chaque utilisateur·rice Discord peut emprunter **1 jeu à la fois**, **pour 2 semaines max**, et pas deux fois de suite le même jeu.\n\n"
+                "📋 Vous trouverez la liste des jeux empruntables ci-dessous.\n\n"
                 "📱 Quand vous prenez ou reposez un jeu dans le placard, indiquez-le **immédiatement** ici à l'aide de ces commandes :\n\n"
-                "📤Pour emprunter : `/emprunt <numéro du jeu>`, (ex : `/emprunt 3`).\n"
-                "📥Pour retourner : `/retour <numéro du jeu>`, (ex : `/retour 3`).\n\n"
+                "📤 Pour emprunter :\n"
+                "`/emprunt <n° du jeu>`, (ex : `/emprunt 3`).\n"
+                "📥 Pour retourner :\n"
+                "`/retour <n° du jeu>`, (ex : `/retour 3`).\n\n"
                 "⚠️ Ces commandes fonctionnent **uniquement sur les horaires des séances ludiques**. Pensez donc à les faire **sur le moment**, depuis Discord sur votre smartphone.\n"
                 "\u200B\n")
             embeds = [
