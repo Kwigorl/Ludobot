@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 import os
+import aiohttp
 from datetime import datetime, timedelta
 from supabase import create_client
 import pytz
@@ -152,21 +153,20 @@ class Emprunts(commands.Cog):
     # --------------------------
     # KEEPALIVE SUPABASE
     # --------------------------
-    @tasks.loop(hours=1)
+    @tasks.loop(hours=48)
     async def keepalive_supabase(self):
-        now = datetime.now(TIMEZONE)
-        # Nuit lundi→mardi (lundi=0) à 3h00
-        # Nuit jeudi→vendredi (jeudi=3) à 3h00
-        if now.weekday() in (0, 3) and now.hour == 3:
-            try:
-                # Insertion d'un jeu fictif
-                res = supabase.table("jeux").insert({"nom": "__keepalive__"}).execute()
-                jeu_id = res.data[0]["id"]
-                # Suppression immédiate
-                supabase.table("jeux").delete().eq("id", jeu_id).execute()
-                print(f"✅ Keepalive Supabase effectué ({now.strftime('%d/%m %H:%M')})")
-            except Exception as e:
-                print(f"❌ Keepalive échoué : {e}")
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/jeux?select=id&limit=1"
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as resp:
+                    now = datetime.now(TIMEZONE)
+                    print(f"✅ Keepalive Supabase HTTP {resp.status} ({now.strftime('%d/%m %H:%M')})")
+        except Exception as e:
+            print(f"❌ Keepalive échoué : {e}")
 
     @keepalive_supabase.before_loop
     async def before_keepalive(self):
@@ -264,7 +264,6 @@ class Emprunts(commands.Cog):
             if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
                 await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
                 return
-            # Ajouter le jeu
             supabase.table("jeux").insert({"nom": jeu}).execute()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
