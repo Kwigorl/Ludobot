@@ -215,9 +215,9 @@ class Emprunts(commands.Cog):
             if not j["emprunte"]:
                 await interaction.followup.send("❌ Ce jeu n'est pas emprunté.", ephemeral=True)
                 return
-if j["emprunteur_id"] != interaction.user.id:
-    await interaction.followup.send("❌ Retour impossible : tu n'as pas ce jeu en ta possession.", ephemeral=True)
-    return
+            if j["emprunteur_id"] != interaction.user.id:
+                await interaction.followup.send("❌ Retour impossible : tu n'as pas ce jeu en ta possession.", ephemeral=True)
+                return
             now_paris = datetime.now(TIMEZONE)
             with get_conn() as conn:
                 with conn.cursor() as cur:
