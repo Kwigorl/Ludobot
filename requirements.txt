@@ -1,6 +1,5 @@
 discord.py>=2.6.0
 flask
-supabase>=2.4.0
+psycopg2-binary
 python-dotenv
 pytz
-aiohttp
