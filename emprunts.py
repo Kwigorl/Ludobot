@@ -24,7 +24,8 @@ TIMEZONE = pytz.timezone("Europe/Paris")
 CRENEAUX = [
     {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-24h
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
-    {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
+    {"jour": 6, "start": 14, "end": 18},  # Dimanche 14h-18h
+    {"jour": 7, "start": 10, "end": 20}   # Test Lundi 10h-20h
 ]
 
 # --------------------------
