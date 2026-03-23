@@ -2,11 +2,17 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 import os
+import json
 import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
 import pytz
 import traceback
+import openpyxl
+import tempfile
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 # --------------------------
 # CONFIGURATION via variables d'environnement
@@ -14,6 +20,8 @@ import traceback
 CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
 DATABASE_URL = os.environ["DATABASE_URL"]
+GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]
+DRIVE_FOLDER_ID = "1_d2ecAAyx5xc6bxJl2oDUDDBywa00Okj"
 
 TIMEZONE = pytz.timezone("Europe/Paris")
 
@@ -24,8 +32,8 @@ TIMEZONE = pytz.timezone("Europe/Paris")
 CRENEAUX = [
     {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-24h
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
-    {"jour": 6, "start": 14, "end": 18},  # Dimanche 14h-18h
-    {"jour": 0, "start": 10, "end": 20}   # Test Lundi 10h-20h
+    {"jour": 6, "start": 14, "end": 18},   # Dimanche 14h-18h
+    {"jour": 0, "start": 10, "end": 22}
 ]
 
 # --------------------------
@@ -108,11 +116,77 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
         return False
 
 # --------------------------
+# EXPORT GOOGLE DRIVE
+# --------------------------
+def get_drive_service():
+    creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+    creds = Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/drive.file"]
+    )
+    return build("drive", "v3", credentials=creds)
+
+def export_historique_vers_drive(mois: int, annee: int):
+    if mois == 12:
+        fin_dt = datetime(annee + 1, 1, 1, tzinfo=TIMEZONE)
+    else:
+        fin_dt = datetime(annee, mois + 1, 1, tzinfo=TIMEZONE)
+    debut_dt = datetime(annee, mois, 1, tzinfo=TIMEZONE)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT user_pseudo, jeu_nom, date_emprunt, date_retour
+                FROM historique_emprunts
+                ORDER BY date_emprunt
+            """)
+            rows = cur.fetchall()
+
+    mois_rows = []
+    for r in rows:
+        try:
+            d = TIMEZONE.localize(datetime.strptime(r["date_emprunt"], "%d/%m/%Y %H:%M"))
+            if debut_dt <= d < fin_dt:
+                mois_rows.append(r)
+        except Exception:
+            continue
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    mois_noms = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    ws.title = mois_noms[mois - 1]
+    ws.append(["Pseudo", "Jeu", "Date d'emprunt", "Date de retour"])
+    for r in mois_rows:
+        ws.append([
+            r["user_pseudo"],
+            r["jeu_nom"],
+            r["date_emprunt"],
+            r["date_retour"] or "Non retourné"
+        ])
+
+    nom_fichier = f"Emprunts_{mois_noms[mois - 1]}_{annee}.xlsx"
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp_path = tmp.name
+    wb.save(tmp_path)
+
+    service = get_drive_service()
+    file_metadata = {
+        "name": nom_fichier,
+        "parents": [DRIVE_FOLDER_ID]
+    }
+    media = MediaFileUpload(tmp_path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    os.remove(tmp_path)
+    print(f"✅ Export Drive : {nom_fichier}")
+
+# --------------------------
 # COG
 # --------------------------
 class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.export_mensuel.start()
 
     async def update_message(self, channel):
         try:
@@ -149,6 +223,24 @@ class Emprunts(commands.Cog):
             await channel.send(content=text, embeds=embeds)
         except Exception as e:
             print("❌ update_message:", e)
+
+    # --------------------------
+    # EXPORT MENSUEL AUTOMATIQUE
+    # --------------------------
+    @tasks.loop(hours=1)
+    async def export_mensuel(self):
+        now = datetime.now(TIMEZONE)
+        if now.day == 1 and now.hour == 3:
+            mois_precedent = now.month - 1 if now.month > 1 else 12
+            annee = now.year if now.month > 1 else now.year - 1
+            try:
+                export_historique_vers_drive(mois_precedent, annee)
+            except Exception as e:
+                print(f"❌ Export mensuel échoué : {e}")
+
+    @export_mensuel.before_loop
+    async def before_export(self):
+        await self.bot.wait_until_ready()
 
     # --------------------------
     # /emprunt
@@ -212,10 +304,7 @@ class Emprunts(commands.Cog):
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
-            if not j["emprunte"]:
-                await interaction.followup.send("❌ Ce jeu n'est pas emprunté.", ephemeral=True)
-                return
-            if j["emprunteur_id"] != interaction.user.id:
+            if not j["emprunte"] or j["emprunteur_id"] != interaction.user.id:
                 await interaction.followup.send("❌ Retour impossible : tu n'as pas ce jeu en ta possession.", ephemeral=True)
                 return
             now_paris = datetime.now(TIMEZONE)
