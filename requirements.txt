@@ -3,3 +3,6 @@ flask
 psycopg2-binary
 python-dotenv
 pytz
+openpyxl
+google-auth
+google-api-python-client
