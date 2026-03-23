@@ -209,12 +209,15 @@ class Emprunts(commands.Cog):
                 await interaction.followup.send("⏰ Emprunts et retours impossibles en dehors des horaires des séances ludiques.", ephemeral=True)
                 return
             j = find_jeu(jeu)
-            if not j or not j["emprunte"]:
-                await interaction.followup.send("❌ Jeu invalide.", ephemeral=True)
+            if not j:
+                await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
-            if j["emprunteur_id"] != interaction.user.id:
-                await interaction.followup.send("❌ Ce n'est pas ton emprunt.", ephemeral=True)
+            if not j["emprunte"]:
+                await interaction.followup.send("❌ Ce jeu n'est pas emprunté.", ephemeral=True)
                 return
+if j["emprunteur_id"] != interaction.user.id:
+    await interaction.followup.send("❌ Retour impossible : tu n'as pas ce jeu en ta possession.", ephemeral=True)
+    return
             now_paris = datetime.now(TIMEZONE)
             with get_conn() as conn:
                 with conn.cursor() as cur:
