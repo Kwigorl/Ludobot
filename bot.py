@@ -38,34 +38,41 @@ bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATIO
 @bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
-    
-    # Synchronisation des commandes slash
+
     try:
         await bot.tree.sync()
         print("Commandes slash synchronisées")
     except Exception as e:
         print(f"Erreur de synchronisation : {e}")
-    
-    # Poster le message initial de la liste des jeux
+
     channel = bot.get_channel(CANAL_ID)
     if channel:
         cog = bot.get_cog("Emprunts")
         if cog:
             await cog.update_message(channel)
             print("Message initial de liste des jeux posté")
-    
-    # Démarrer la suppression automatique des messages
+
     delete_non_command_messages.start()
 
+@bot.event
+async def on_message(message):
+    if message.channel.id == CANAL_ID and message.author != bot.user:
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            print(f"⚠️ Impossible de supprimer un message dans #{message.channel} (permissions manquantes)")
+        except Exception as e:
+            print(f"Erreur suppression message : {e}")
+
 # ----------------------
-# SUPPRESSION DES MESSAGES NON-COMMANDES
+# SUPPRESSION DES MESSAGES NON-COMMANDES (filet de sécurité)
 # ----------------------
-@tasks.loop(minutes=1)  # ✅ Changé de 1 seconde à 1 minute
+@tasks.loop(minutes=1)
 async def delete_non_command_messages():
     channel = bot.get_channel(CANAL_ID)
     if not channel:
         return
-    
+
     try:
         async for message in channel.history(limit=50):
             if message.author != bot.user and not message.content.startswith("/"):
@@ -89,9 +96,6 @@ async def load_cogs():
 # LANCEMENT
 # ----------------------
 if __name__ == "__main__":
-    # Flask dans un thread séparé
     threading.Thread(target=run_flask).start()
-    
-    # Charger les cogs et lancer le bot
     asyncio.run(load_cogs())
     bot.run(TOKEN)
