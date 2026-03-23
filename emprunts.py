@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 import os
-import aiohttp
+import psycopg2
+import psycopg2.extras
 from datetime import datetime, timedelta
-from supabase import create_client
 import pytz
 import traceback
 
@@ -13,26 +13,25 @@ import traceback
 # --------------------------
 CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
+DATABASE_URL = os.environ["DATABASE_URL"]
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-
-# --------------------------
-# INITIALISATION SUPABASE
-# --------------------------
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+TIMEZONE = pytz.timezone("Europe/Paris")
 
 # --------------------------
 # CRÉNEAUX D'EMPRUNT
 # --------------------------
 # 0=Lundi ... 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 20, "end": 24},  # Mercredi 15h-24h
+    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-24h
     {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
     {"jour": 6, "start": 14, "end": 18}   # Dimanche 14h-18h
 ]
 
-TIMEZONE = pytz.timezone("Europe/Paris")
+# --------------------------
+# CONNEXION BDD
+# --------------------------
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
 
 # --------------------------
 # FONCTIONS UTILES
@@ -45,7 +44,10 @@ def est_disponible():
     return False
 
 def get_jeux():
-    return supabase.table("jeux").select("*").order("nom").execute().data
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM jeux ORDER BY nom")
+            return cur.fetchall()
 
 def format_liste(jeux, filtre=None):
     lines = []
@@ -53,8 +55,8 @@ def format_liste(jeux, filtre=None):
         if filtre is not None and j["emprunte"] != filtre:
             continue
         if j["emprunte"]:
-            start = datetime.fromisoformat(j["date_emprunt"]).strftime("%d/%m")
-            end = (datetime.fromisoformat(j["date_emprunt"]) + timedelta(days=14)).strftime("%d/%m")
+            start = j["date_emprunt"].strftime("%d/%m")
+            end = (j["date_emprunt"] + timedelta(days=14)).strftime("%d/%m")
             emprunteur = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
             lines.append(f"**{idx}.** {j['nom']} ({emprunteur} du {start} au {end})")
         else:
@@ -70,12 +72,10 @@ def normaliser_texte(txt):
 
 def find_jeu(user_input):
     jeux = get_jeux()
-    # Recherche par numéro
     if user_input.isdigit():
         idx = int(user_input) - 1
         if 0 <= idx < len(jeux):
             return jeux[idx]
-    # Recherche par nom insensible aux accents
     search = normaliser_texte(user_input)
     for j in jeux:
         if search in normaliser_texte(j["nom"]):
@@ -83,23 +83,22 @@ def find_jeu(user_input):
     return None
 
 def user_a_emprunt(user_id):
-    return bool(
-        supabase.table("jeux")
-        .select("id")
-        .eq("emprunteur_id", user_id)
-        .execute()
-        .data
-    )
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM jeux WHERE emprunteur_id = %s", (user_id,))
+            return bool(cur.fetchone())
 
 def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
     try:
         limite = datetime.now(TIMEZONE) - timedelta(days=30)
-        response = supabase.table("historique_emprunts") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .eq("jeu_id", jeu_id) \
-            .execute()
-        for e in response.data:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM historique_emprunts WHERE user_id = %s AND jeu_id = %s",
+                    (user_id, jeu_id)
+                )
+                rows = cur.fetchall()
+        for e in rows:
             d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%d/%m/%Y %H:%M"))
             if d >= limite:
                 return True
@@ -113,13 +112,12 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
 class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.keepalive_supabase.start()
 
     async def update_message(self, channel):
         try:
             jeux = get_jeux()
             text = (
-                 "## Emprunts de jeux\n"
+                "## Emprunts de jeux\n"
                 "\u200B\n"
                 "🙋 Chaque utilisateur·rice Discord peut emprunter **1 jeu à la fois**, **pour 2 semaines max**, et pas deux fois de suite le même jeu.\n\n"
                 "📋 Vous trouverez la liste des jeux empruntables ci-dessous.\n\n"
@@ -129,7 +127,8 @@ class Emprunts(commands.Cog):
                 "📥 Pour retourner :\n"
                 "`/retour <n° du jeu>`, (ex : `/retour 3`).\n\n"
                 "⚠️ Ces commandes fonctionnent **uniquement sur les horaires des séances ludiques**. Pensez donc à les faire **sur le moment**, depuis Discord sur votre smartphone.\n"
-                "\u200B\n")
+                "\u200B\n"
+            )
             embeds = [
                 discord.Embed(
                     title="✅ Jeux disponibles",
@@ -149,28 +148,6 @@ class Emprunts(commands.Cog):
             await channel.send(content=text, embeds=embeds)
         except Exception as e:
             print("❌ update_message:", e)
-
-    # --------------------------
-    # KEEPALIVE SUPABASE
-    # --------------------------
-    @tasks.loop(hours=48)
-    async def keepalive_supabase(self):
-        try:
-            url = f"{SUPABASE_URL}/rest/v1/jeux?select=id&limit=1"
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as resp:
-                    now = datetime.now(TIMEZONE)
-                    print(f"✅ Keepalive Supabase HTTP {resp.status} ({now.strftime('%d/%m %H:%M')})")
-        except Exception as e:
-            print(f"❌ Keepalive échoué : {e}")
-
-    @keepalive_supabase.before_loop
-    async def before_keepalive(self):
-        await self.bot.wait_until_ready()
 
     # --------------------------
     # /emprunt
@@ -197,25 +174,23 @@ class Emprunts(commands.Cog):
             if user_a_deja_emprunte_ce_jeu(user_id, j["id"]):
                 await interaction.followup.send("❌ Tu as déjà emprunté ce jeu récemment.", ephemeral=True)
                 return
-            now_iso = datetime.now().isoformat()
+            now = datetime.now()
             now_paris = datetime.now(TIMEZONE)
-            supabase.table("jeux").update({
-                "emprunte": True,
-                "emprunteur": display,
-                "emprunteur_id": user_id,
-                "date_emprunt": now_iso
-            }).eq("id", j["id"]).execute()
-            supabase.table("historique_emprunts").insert({
-                "user_id": user_id,
-                "user_pseudo": display,
-                "jeu_id": j["id"],
-                "jeu_nom": j["nom"],
-                "date_emprunt": now_paris.strftime("%d/%m/%Y %H:%M"),
-                "date_retour": None
-            }).execute()
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE jeux SET emprunte = TRUE, emprunteur = %s,
+                        emprunteur_id = %s, date_emprunt = %s WHERE id = %s
+                    """, (display, user_id, now, j["id"]))
+                    cur.execute("""
+                        INSERT INTO historique_emprunts
+                        (user_id, user_pseudo, jeu_id, jeu_nom, date_emprunt, date_retour)
+                        VALUES (%s, %s, %s, %s, %s, NULL)
+                    """, (user_id, display, j["id"], j["nom"], now_paris.strftime("%d/%m/%Y %H:%M")))
+                conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(
-                f"✅ **{j['nom']}** emprunté (retour max {(datetime.fromisoformat(now_iso)+timedelta(days=14)).strftime('%d/%m')}).",
+                f"✅ **{j['nom']}** emprunté (retour max {(now + timedelta(days=14)).strftime('%d/%m')}).",
                 ephemeral=True
             )
         except Exception:
@@ -239,15 +214,18 @@ class Emprunts(commands.Cog):
             if j["emprunteur_id"] != interaction.user.id:
                 await interaction.followup.send("❌ Ce n'est pas ton emprunt.", ephemeral=True)
                 return
-            supabase.table("jeux").update({
-                "emprunte": False,
-                "emprunteur": None,
-                "emprunteur_id": None,
-                "date_emprunt": None
-            }).eq("id", j["id"]).execute()
-            supabase.table("historique_emprunts").update({
-                "date_retour": datetime.now(TIMEZONE).strftime("%d/%m/%Y %H:%M")
-            }).eq("jeu_id", j["id"]).eq("user_id", interaction.user.id).is_("date_retour", "null").execute()
+            now_paris = datetime.now(TIMEZONE)
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE jeux SET emprunte = FALSE, emprunteur = NULL,
+                        emprunteur_id = NULL, date_emprunt = NULL WHERE id = %s
+                    """, (j["id"],))
+                    cur.execute("""
+                        UPDATE historique_emprunts SET date_retour = %s
+                        WHERE jeu_id = %s AND user_id = %s AND date_retour IS NULL
+                    """, (now_paris.strftime("%d/%m/%Y %H:%M"), j["id"], interaction.user.id))
+                conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ **{j['nom']}** retourné.", ephemeral=True)
         except Exception:
@@ -264,7 +242,10 @@ class Emprunts(commands.Cog):
             if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
                 await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
                 return
-            supabase.table("jeux").insert({"nom": jeu}).execute()
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("INSERT INTO jeux (nom) VALUES (%s)", (jeu,))
+                conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
         except Exception:
@@ -285,7 +266,10 @@ class Emprunts(commands.Cog):
             if not j:
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
-            supabase.table("jeux").delete().eq("id", j["id"]).execute()
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM jeux WHERE id = %s", (j["id"],))
+                conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ {j['nom']} retiré.", ephemeral=True)
         except Exception:
