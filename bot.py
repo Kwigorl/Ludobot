@@ -1,28 +1,13 @@
 import os
-import threading
-from flask import Flask
-import discord
-from discord.ext import commands, tasks
 import asyncio
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
 
-# ----------------------
-# FLASK pour Render (ping)
-# ----------------------
-app = Flask(__name__)
+load_dotenv()
 
-@app.route("/")
-def home():
-    return "Bot Discord actif !", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-# ----------------------
-# DISCORD BOT
-# ----------------------
 TOKEN = os.environ["DISCORD_TOKEN"]
-APPLICATION_ID = int(os.environ["DISCORD_APPLICATION_ID"])
+APPLICATION_ID = int(os.environ["APPLICATION_ID"])
 CANAL_ID = int(os.environ["CANAL_ID"])
 
 intents = discord.Intents.default()
@@ -32,19 +17,14 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATION_ID)
 
-# ----------------------
-# EVENTS
-# ----------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
-
     try:
         await bot.tree.sync()
         print("Commandes slash synchronisées")
     except Exception as e:
         print(f"Erreur de synchronisation : {e}")
-
     channel = bot.get_channel(CANAL_ID)
     if channel:
         cog = bot.get_cog("Emprunts")
@@ -62,17 +42,10 @@ async def on_message(message):
         except Exception as e:
             print(f"Erreur suppression message : {e}")
 
-# ----------------------
-# COGS
-# ----------------------
 async def load_cogs():
     await bot.load_extension("emprunts")
     print("Cog 'emprunts' chargé !")
 
-# ----------------------
-# LANCEMENT
-# ----------------------
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
     asyncio.run(load_cogs())
     bot.run(TOKEN)
