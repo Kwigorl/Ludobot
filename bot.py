@@ -52,8 +52,6 @@ async def on_ready():
             await cog.update_message(channel)
             print("Message initial de liste des jeux posté")
 
-    delete_non_command_messages.start()
-
 @bot.event
 async def on_message(message):
     if message.channel.id == CANAL_ID and message.author != bot.user:
@@ -63,27 +61,6 @@ async def on_message(message):
             print(f"⚠️ Impossible de supprimer un message dans #{message.channel} (permissions manquantes)")
         except Exception as e:
             print(f"Erreur suppression message : {e}")
-
-# ----------------------
-# SUPPRESSION DES MESSAGES NON-COMMANDES (filet de sécurité)
-# ----------------------
-@tasks.loop(minutes=1)
-async def delete_non_command_messages():
-    channel = bot.get_channel(CANAL_ID)
-    if not channel:
-        return
-
-    try:
-        async for message in channel.history(limit=50):
-            if message.author != bot.user and not message.content.startswith("/"):
-                try:
-                    await message.delete()
-                except discord.Forbidden:
-                    print(f"⚠️ Impossible de supprimer un message dans #{channel} (permissions manquantes)")
-                except Exception as e:
-                    print(f"Erreur suppression message : {e}")
-    except Exception as e:
-        print(f"Erreur boucle suppression messages : {e}")
 
 # ----------------------
 # COGS
