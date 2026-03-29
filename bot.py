@@ -1,11 +1,13 @@
 import os
-import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ----------------------
+# DISCORD BOT
+# ----------------------
 TOKEN = os.environ["DISCORD_TOKEN"]
 APPLICATION_ID = int(os.environ["APPLICATION_ID"])
 CANAL_ID = int(os.environ["CANAL_ID"])
@@ -17,6 +19,18 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="", intents=intents, application_id=APPLICATION_ID)
 
+# ----------------------
+# COGS
+# ----------------------
+async def setup_hook():
+    await bot.load_extension("emprunts")
+    print("Cog 'emprunts' chargé !")
+
+bot.setup_hook = setup_hook
+
+# ----------------------
+# EVENTS
+# ----------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} connecté !")
@@ -42,10 +56,8 @@ async def on_message(message):
         except Exception as e:
             print(f"Erreur suppression message : {e}")
 
-async def load_cogs():
-    await bot.load_extension("emprunts")
-    print("Cog 'emprunts' chargé !")
-
+# ----------------------
+# LANCEMENT
+# ----------------------
 if __name__ == "__main__":
-    asyncio.run(load_cogs())
     bot.run(TOKEN)
