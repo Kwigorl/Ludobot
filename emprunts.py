@@ -20,6 +20,7 @@ CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
 GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]
 DRIVE_FOLDER_ID = "1_d2ecAAyx5xc6bxJl2oDUDDBywa00Okj"
+BACKUP_FOLDER_ID = "1eMTgCLZfk95PtmiNUl7_x3URcLJseOIx"
 DB_PATH = os.path.join(os.path.dirname(__file__), "ludobot.db")
 BACKUP_FILENAME = "ludobot_backup.db"
 
@@ -176,7 +177,7 @@ def export_historique_vers_drive(mois: int, annee: int):
 def sauvegarder_db_vers_drive():
     service = get_drive_service()
     results = service.files().list(
-        q=f"name='{BACKUP_FILENAME}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false",
+        q=f"name='{BACKUP_FILENAME}' and '{BACKUP_FOLDER_ID}' in parents and trashed=false",
         fields="files(id)"
     ).execute()
     files = results.get("files", [])
@@ -185,7 +186,7 @@ def sauvegarder_db_vers_drive():
     if files:
         service.files().update(fileId=files[0]["id"], media_body=media).execute()
     else:
-        file_metadata = {"name": BACKUP_FILENAME, "parents": [DRIVE_FOLDER_ID]}
+        file_metadata = {"name": BACKUP_FILENAME, "parents": [BACKUP_FOLDER_ID]}
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
     print("✅ Sauvegarde DB effectuée")
 
