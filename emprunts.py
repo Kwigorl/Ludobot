@@ -53,9 +53,17 @@ def est_disponible():
             return True
     return False
 
+def normaliser_texte(txt):
+    accents = str.maketrans(
+        "éèêëàâäùûüôöîïç",
+        "eeeeaaauuuooiic"
+    )
+    return txt.lower().translate(accents)
+
 def get_jeux():
     with get_conn() as conn:
-        return conn.execute("SELECT * FROM jeux ORDER BY LOWER(nom)").fetchall()
+        jeux = conn.execute("SELECT * FROM jeux").fetchall()
+        return sorted(jeux, key=lambda j: normaliser_texte(j["nom"]))
 
 def format_liste(jeux, filtre=None):
     lines = []
@@ -71,13 +79,6 @@ def format_liste(jeux, filtre=None):
         else:
             lines.append(f"**{idx}.** {j['nom']}")
     return "\n".join(lines) if lines else "Aucun"
-
-def normaliser_texte(txt):
-    accents = str.maketrans(
-        "éèêëàâäùûüôöîïç",
-        "eeeeaaauuuooiic"
-    )
-    return txt.lower().translate(accents)
 
 def find_jeu(user_input):
     jeux = get_jeux()
