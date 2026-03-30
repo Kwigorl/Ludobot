@@ -213,6 +213,7 @@ class Emprunts(commands.Cog):
                 "📥 Pour retourner :\n"
                 "`/retour <n° du jeu>`, (ex : `/retour 3`).\n\n"
                 "⚠️ Ces commandes fonctionnent **uniquement sur les horaires des séances ludiques**. Pensez donc à les faire **sur le moment**, depuis Discord sur votre smartphone.\n"
+		"⚠️ En cas de détérioration ou de perte du jeu emprunté ou de l'un de ses éléments, un dédommagement pourra être demandé à la personne responsable.\n"
                 "\u200B\n"
             )
             embeds = [
