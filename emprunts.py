@@ -3,8 +3,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import os
 import json
-import psycopg2
-import psycopg2.extras
+import sqlite3
 from datetime import datetime, timedelta
 import pytz
 import traceback
@@ -19,29 +18,30 @@ from googleapiclient.http import MediaFileUpload
 # --------------------------
 CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
-DATABASE_URL = os.environ["DATABASE_URL"]
 GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]
 DRIVE_FOLDER_ID = "1_d2ecAAyx5xc6bxJl2oDUDDBywa00Okj"
+DB_PATH = os.path.join(os.path.dirname(__file__), "ludobot.db")
 
 TIMEZONE = pytz.timezone("Europe/Paris")
 
 # --------------------------
 # CRÉNEAUX D'EMPRUNT
 # --------------------------
-# 0=Lundi ... 6=Dimanche
 CRENEAUX = [
-    {"jour": 2, "start": 20, "end": 24},  # Mercredi 20h-24h
-    {"jour": 3, "start": 0, "end": 1},    # Jeudi 0h-1h (suite mercredi)
-    {"jour": 4, "start": 20, "end": 24},  # Vendredi 20h-24h
-    {"jour": 5, "start": 0, "end": 1},    # Samedi 0h-1h (suite vendredi)
-    {"jour": 6, "start": 14, "end": 19}   # Dimanche 14h-18h
+    {"jour": 2, "start": 20, "end": 24},
+    {"jour": 3, "start": 0, "end": 1},
+    {"jour": 4, "start": 20, "end": 24},
+    {"jour": 5, "start": 0, "end": 1},
+    {"jour": 6, "start": 14, "end": 19}
 ]
 
 # --------------------------
 # CONNEXION BDD
 # --------------------------
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # --------------------------
 # FONCTIONS UTILES
@@ -55,18 +55,17 @@ def est_disponible():
 
 def get_jeux():
     with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM jeux ORDER BY nom")
-            return cur.fetchall()
+        return conn.execute("SELECT * FROM jeux ORDER BY LOWER(nom)").fetchall()
 
 def format_liste(jeux, filtre=None):
     lines = []
     for idx, j in enumerate(jeux, start=1):
-        if filtre is not None and j["emprunte"] != filtre:
+        if filtre is not None and bool(j["emprunte"]) != filtre:
             continue
         if j["emprunte"]:
-            start = j["date_emprunt"].strftime("%d/%m")
-            end = (j["date_emprunt"] + timedelta(days=14)).strftime("%d/%m")
+            date_emprunt = datetime.strptime(j["date_emprunt"], "%Y-%m-%d %H:%M:%S")
+            start = date_emprunt.strftime("%d/%m")
+            end = (date_emprunt + timedelta(days=14)).strftime("%d/%m")
             emprunteur = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
             lines.append(f"**{idx}.** {j['nom']} ({emprunteur} du {start} au {end})")
         else:
@@ -94,22 +93,23 @@ def find_jeu(user_input):
 
 def user_a_emprunt(user_id):
     with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM jeux WHERE emprunteur_id = %s", (user_id,))
-            return bool(cur.fetchone())
+        return bool(conn.execute(
+            "SELECT id FROM jeux WHERE emprunteur_id = ?", (user_id,)
+        ).fetchone())
 
 def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
     try:
         limite = datetime.now(TIMEZONE) - timedelta(days=30)
         with get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT * FROM historique_emprunts WHERE user_id = %s AND jeu_id = %s",
-                    (user_id, jeu_id)
-                )
-                rows = cur.fetchall()
+            rows = conn.execute(
+                "SELECT date_emprunt FROM historique_emprunts WHERE user_id = ? AND jeu_id = ?",
+                (user_id, jeu_id)
+            ).fetchall()
         for e in rows:
-            d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%d/%m/%Y %H:%M"))
+            try:
+                d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%d/%m/%Y %H:%M"))
+            except ValueError:
+                d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%Y-%m-%d %H:%M:%S"))
             if d >= limite:
                 return True
         return False
@@ -135,22 +135,20 @@ def export_historique_vers_drive(mois: int, annee: int):
     debut_dt = datetime(annee, mois, 1, tzinfo=TIMEZONE)
 
     with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("""
-                SELECT user_pseudo, jeu_nom, date_emprunt, date_retour
-                FROM historique_emprunts
-                ORDER BY date_emprunt
-            """)
-            rows = cur.fetchall()
+        rows = conn.execute("""
+            SELECT user_pseudo, jeu_nom, date_emprunt, date_retour
+            FROM historique_emprunts
+            ORDER BY date_emprunt
+        """).fetchall()
 
     mois_rows = []
     for r in rows:
         try:
             d = TIMEZONE.localize(datetime.strptime(r["date_emprunt"], "%d/%m/%Y %H:%M"))
-            if debut_dt <= d < fin_dt:
-                mois_rows.append(r)
-        except Exception:
-            continue
+        except ValueError:
+            d = TIMEZONE.localize(datetime.strptime(r["date_emprunt"], "%Y-%m-%d %H:%M:%S"))
+        if debut_dt <= d < fin_dt:
+            mois_rows.append(r)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -159,12 +157,7 @@ def export_historique_vers_drive(mois: int, annee: int):
     ws.title = mois_noms[mois - 1]
     ws.append(["Pseudo", "Jeu", "Date d'emprunt", "Date de retour"])
     for r in mois_rows:
-        ws.append([
-            r["user_pseudo"],
-            r["jeu_nom"],
-            r["date_emprunt"],
-            r["date_retour"] or "Non retourné"
-        ])
+        ws.append([r["user_pseudo"], r["jeu_nom"], r["date_emprunt"], r["date_retour"] or "Non retourné"])
 
     nom_fichier = f"Emprunts_{mois_noms[mois - 1]}_{annee}.xlsx"
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
@@ -172,10 +165,7 @@ def export_historique_vers_drive(mois: int, annee: int):
     wb.save(tmp_path)
 
     service = get_drive_service()
-    file_metadata = {
-        "name": nom_fichier,
-        "parents": [DRIVE_FOLDER_ID]
-    }
+    file_metadata = {"name": nom_fichier, "parents": [DRIVE_FOLDER_ID]}
     media = MediaFileUpload(tmp_path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     service.files().create(body=file_metadata, media_body=media, fields="id").execute()
     os.remove(tmp_path)
@@ -225,9 +215,6 @@ class Emprunts(commands.Cog):
         except Exception as e:
             print("❌ update_message:", e)
 
-    # --------------------------
-    # EXPORT MENSUEL AUTOMATIQUE
-    # --------------------------
     @tasks.loop(hours=1)
     async def export_mensuel(self):
         now = datetime.now(TIMEZONE)
@@ -243,9 +230,6 @@ class Emprunts(commands.Cog):
     async def before_export(self):
         await self.bot.wait_until_ready()
 
-    # --------------------------
-    # /emprunt
-    # --------------------------
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
     async def emprunt(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
@@ -271,16 +255,15 @@ class Emprunts(commands.Cog):
             now = datetime.now()
             now_paris = datetime.now(TIMEZONE)
             with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE jeux SET emprunte = TRUE, emprunteur = %s,
-                        emprunteur_id = %s, date_emprunt = %s WHERE id = %s
-                    """, (display, user_id, now, j["id"]))
-                    cur.execute("""
-                        INSERT INTO historique_emprunts
-                        (user_id, user_pseudo, jeu_id, jeu_nom, date_emprunt, date_retour)
-                        VALUES (%s, %s, %s, %s, %s, NULL)
-                    """, (user_id, display, j["id"], j["nom"], now_paris.strftime("%d/%m/%Y %H:%M")))
+                conn.execute("""
+                    UPDATE jeux SET emprunte = 1, emprunteur = ?,
+                    emprunteur_id = ?, date_emprunt = ? WHERE id = ?
+                """, (display, user_id, str(now), j["id"]))
+                conn.execute("""
+                    INSERT INTO historique_emprunts
+                    (user_id, user_pseudo, jeu_id, jeu_nom, date_emprunt, date_retour)
+                    VALUES (?, ?, ?, ?, ?, NULL)
+                """, (user_id, display, j["id"], j["nom"], now_paris.strftime("%d/%m/%Y %H:%M")))
                 conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(
@@ -291,9 +274,6 @@ class Emprunts(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
 
-    # --------------------------
-    # /retour
-    # --------------------------
     @app_commands.command(name="retour", description="Retourne un jeu")
     async def retour(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
@@ -310,15 +290,14 @@ class Emprunts(commands.Cog):
                 return
             now_paris = datetime.now(TIMEZONE)
             with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE jeux SET emprunte = FALSE, emprunteur = NULL,
-                        emprunteur_id = NULL, date_emprunt = NULL WHERE id = %s
-                    """, (j["id"],))
-                    cur.execute("""
-                        UPDATE historique_emprunts SET date_retour = %s
-                        WHERE jeu_id = %s AND user_id = %s AND date_retour IS NULL
-                    """, (now_paris.strftime("%d/%m/%Y %H:%M"), j["id"], interaction.user.id))
+                conn.execute("""
+                    UPDATE jeux SET emprunte = 0, emprunteur = NULL,
+                    emprunteur_id = NULL, date_emprunt = NULL WHERE id = ?
+                """, (j["id"],))
+                conn.execute("""
+                    UPDATE historique_emprunts SET date_retour = ?
+                    WHERE jeu_id = ? AND user_id = ? AND date_retour IS NULL
+                """, (now_paris.strftime("%d/%m/%Y %H:%M"), j["id"], interaction.user.id))
                 conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ **{j['nom']}** retourné.", ephemeral=True)
@@ -326,9 +305,6 @@ class Emprunts(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
 
-    # --------------------------
-    # /ajout (Bureau)
-    # --------------------------
     @app_commands.command(name="ajout", description="Ajoute un jeu (Bureau)")
     async def ajout(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
@@ -336,9 +312,9 @@ class Emprunts(commands.Cog):
             if ROLE_BUREAU_ID not in [r.id for r in interaction.user.roles]:
                 await interaction.followup.send("❌ Tu n'as pas la permission.", ephemeral=True)
                 return
+            jeu = jeu[0].upper() + jeu[1:]
             with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("INSERT INTO jeux (nom) VALUES (%s)", (jeu,))
+                conn.execute("INSERT INTO jeux (nom) VALUES (?)", (jeu,))
                 conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ {jeu} ajouté.", ephemeral=True)
@@ -346,9 +322,6 @@ class Emprunts(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
 
-    # --------------------------
-    # /retrait (Bureau)
-    # --------------------------
     @app_commands.command(name="retrait", description="Retire un jeu (Bureau)")
     async def retrait(self, interaction: discord.Interaction, jeu: str):
         await interaction.response.defer(ephemeral=True)
@@ -361,8 +334,7 @@ class Emprunts(commands.Cog):
                 await interaction.followup.send("❌ Jeu introuvable.", ephemeral=True)
                 return
             with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM jeux WHERE id = %s", (j["id"],))
+                conn.execute("DELETE FROM jeux WHERE id = ?", (j["id"],))
                 conn.commit()
             await self.update_message(self.bot.get_channel(CANAL_ID))
             await interaction.followup.send(f"✅ {j['nom']} retiré.", ephemeral=True)
@@ -370,8 +342,5 @@ class Emprunts(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send("❌ Erreur interne.", ephemeral=True)
 
-# --------------------------
-# SETUP
-# --------------------------
 async def setup(bot):
     await bot.add_cog(Emprunts(bot))
