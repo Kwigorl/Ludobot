@@ -21,6 +21,7 @@ ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
 GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]
 DRIVE_FOLDER_ID = "1_d2ecAAyx5xc6bxJl2oDUDDBywa00Okj"
 DB_PATH = os.path.join(os.path.dirname(__file__), "ludobot.db")
+BACKUP_FILENAME = "ludobot_backup.db"
 
 TIMEZONE = pytz.timezone("Europe/Paris")
 
@@ -71,7 +72,7 @@ def format_liste(jeux, filtre=None):
         if filtre is not None and bool(j["emprunte"]) != filtre:
             continue
         if j["emprunte"]:
-            date_emprunt = datetime.strptime(j["date_emprunt"], "%Y-%m-%d %H:%M:%S")
+            date_emprunt = datetime.strptime(j["date_emprunt"].split(".")[0], "%Y-%m-%d %H:%M:%S")
             start = date_emprunt.strftime("%d/%m")
             end = (date_emprunt + timedelta(days=14)).strftime("%d/%m")
             emprunteur = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
@@ -172,6 +173,22 @@ def export_historique_vers_drive(mois: int, annee: int):
     os.remove(tmp_path)
     print(f"✅ Export Drive : {nom_fichier}")
 
+def sauvegarder_db_vers_drive():
+    service = get_drive_service()
+    results = service.files().list(
+        q=f"name='{BACKUP_FILENAME}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false",
+        fields="files(id)"
+    ).execute()
+    files = results.get("files", [])
+
+    media = MediaFileUpload(DB_PATH, mimetype="application/octet-stream")
+    if files:
+        service.files().update(fileId=files[0]["id"], media_body=media).execute()
+    else:
+        file_metadata = {"name": BACKUP_FILENAME, "parents": [DRIVE_FOLDER_ID]}
+        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    print("✅ Sauvegarde DB effectuée")
+
 # --------------------------
 # COG
 # --------------------------
@@ -179,6 +196,7 @@ class Emprunts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.export_mensuel.start()
+        self.sauvegarde_db.start()
 
     async def update_message(self, channel):
         try:
@@ -229,6 +247,17 @@ class Emprunts(commands.Cog):
 
     @export_mensuel.before_loop
     async def before_export(self):
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(hours=24)
+    async def sauvegarde_db(self):
+        try:
+            sauvegarder_db_vers_drive()
+        except Exception as e:
+            print(f"❌ Sauvegarde DB échouée : {e}")
+
+    @sauvegarde_db.before_loop
+    async def before_sauvegarde(self):
         await self.bot.wait_until_ready()
 
     @app_commands.command(name="emprunt", description="Emprunte un jeu")
