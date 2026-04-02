@@ -18,11 +18,11 @@ from googleapiclient.http import MediaFileUpload
 # --------------------------
 CANAL_ID = int(os.environ["CANAL_ID"])
 ROLE_BUREAU_ID = int(os.environ["ROLE_BUREAU_ID"])
-GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]
 DRIVE_FOLDER_ID = "1_d2ecAAyx5xc6bxJl2oDUDDBywa00Okj"
-BACKUP_FOLDER_ID = "1eMTgCLZfk95PtmiNUl7_x3URcLJseOIx"
+BACKUP_FOLDER_ID = "1zTLCi1Zj6yiq99g0ndd8pV2-tU5FGQ_v"
 DB_PATH = os.path.join(os.path.dirname(__file__), "ludobot.db")
 BACKUP_FILENAME = "ludobot_backup.db"
+CREDENTIALS_PATH = os.path.join(os.path.dirname(__file__), "google_credentials.json")
 
 TIMEZONE = pytz.timezone("Europe/Paris")
 
@@ -112,7 +112,7 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
             try:
                 d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%d/%m/%Y %H:%M"))
             except ValueError:
-                d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"], "%Y-%m-%d %H:%M:%S"))
+                d = TIMEZONE.localize(datetime.strptime(e["date_emprunt"].split(".")[0], "%Y-%m-%d %H:%M:%S"))
             if d >= limite:
                 return True
         return False
@@ -123,7 +123,8 @@ def user_a_deja_emprunte_ce_jeu(user_id, jeu_id):
 # EXPORT GOOGLE DRIVE
 # --------------------------
 def get_drive_service():
-    creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+    with open(CREDENTIALS_PATH) as f:
+        creds_dict = json.load(f)
     creds = Credentials.from_service_account_info(
         creds_dict,
         scopes=["https://www.googleapis.com/auth/drive.file"]
@@ -132,10 +133,10 @@ def get_drive_service():
 
 def export_historique_vers_drive(mois: int, annee: int):
     if mois == 12:
-        fin_dt = datetime(annee + 1, 1, 1, tzinfo=TIMEZONE)
+        fin_dt = datetime(annee + 1, 1, 1)
     else:
-        fin_dt = datetime(annee, mois + 1, 1, tzinfo=TIMEZONE)
-    debut_dt = datetime(annee, mois, 1, tzinfo=TIMEZONE)
+        fin_dt = datetime(annee, mois + 1, 1)
+    debut_dt = datetime(annee, mois, 1)
 
     with get_conn() as conn:
         rows = conn.execute("""
@@ -147,9 +148,12 @@ def export_historique_vers_drive(mois: int, annee: int):
     mois_rows = []
     for r in rows:
         try:
-            d = TIMEZONE.localize(datetime.strptime(r["date_emprunt"], "%d/%m/%Y %H:%M"))
+            d = datetime.strptime(r["date_emprunt"], "%d/%m/%Y %H:%M")
         except ValueError:
-            d = TIMEZONE.localize(datetime.strptime(r["date_emprunt"], "%Y-%m-%d %H:%M:%S"))
+            try:
+                d = datetime.strptime(r["date_emprunt"].split(".")[0], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
         if debut_dt <= d < fin_dt:
             mois_rows.append(r)
 
@@ -170,7 +174,9 @@ def export_historique_vers_drive(mois: int, annee: int):
     service = get_drive_service()
     file_metadata = {"name": nom_fichier, "parents": [DRIVE_FOLDER_ID]}
     media = MediaFileUpload(tmp_path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    service.files().create(
+        body=file_metadata, media_body=media, fields="id", supportsAllDrives=True
+    ).execute()
     os.remove(tmp_path)
     print(f"✅ Export Drive : {nom_fichier}")
 
@@ -178,16 +184,22 @@ def sauvegarder_db_vers_drive():
     service = get_drive_service()
     results = service.files().list(
         q=f"name='{BACKUP_FILENAME}' and '{BACKUP_FOLDER_ID}' in parents and trashed=false",
-        fields="files(id)"
+        fields="files(id)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
     ).execute()
     files = results.get("files", [])
 
     media = MediaFileUpload(DB_PATH, mimetype="application/octet-stream")
     if files:
-        service.files().update(fileId=files[0]["id"], media_body=media).execute()
+        service.files().update(
+            fileId=files[0]["id"], media_body=media, supportsAllDrives=True
+        ).execute()
     else:
         file_metadata = {"name": BACKUP_FILENAME, "parents": [BACKUP_FOLDER_ID]}
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        service.files().create(
+            body=file_metadata, media_body=media, fields="id", supportsAllDrives=True
+        ).execute()
     print("✅ Sauvegarde DB effectuée")
 
 # --------------------------
@@ -213,7 +225,7 @@ class Emprunts(commands.Cog):
                 "📥 Pour retourner :\n"
                 "`/retour <n° du jeu>`, (ex : `/retour 3`).\n\n"
                 "⚠️ Ces commandes fonctionnent **uniquement sur les horaires des séances ludiques**. Pensez donc à les faire **sur le moment**, depuis Discord sur votre smartphone.\n"
-		"⚠️ En cas de détérioration ou de perte du jeu emprunté ou de l'un de ses éléments, un dédommagement pourra être demandé à la personne responsable.\n"
+                "⚠️ En cas de détérioration ou de perte du jeu emprunté ou de l'un de ses éléments, un dédommagement pourra être demandé à la personne responsable.\n"
                 "\u200B\n"
             )
             embeds = [
