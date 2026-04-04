@@ -76,7 +76,12 @@ def format_liste(jeux, filtre=None):
             date_emprunt = datetime.strptime(j["date_emprunt"].split(".")[0], "%Y-%m-%d %H:%M:%S")
             start = date_emprunt.strftime("%d/%m")
             end = (date_emprunt + timedelta(days=14)).strftime("%d/%m")
-            emprunteur = f"<@{j['emprunteur_id']}>" if j["emprunteur_id"] else j["emprunteur"]
+            if j["emprunteur_id"] and j["emprunteur"]:
+                emprunteur = f"[{j['emprunteur']}](https://discord.com/users/{j['emprunteur_id']})"
+            elif j["emprunteur_id"]:
+                emprunteur = f"<@{j['emprunteur_id']}>"
+            else:
+                emprunteur = j["emprunteur"]
             lines.append(f"**{idx}.** {j['nom']} ({emprunteur} du {start} au {end})")
         else:
             lines.append(f"**{idx}.** {j['nom']}")
